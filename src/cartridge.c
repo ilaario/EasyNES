@@ -288,6 +288,9 @@ cartrige read_allocate_cartridge(const char* cartridge_path){
         perror("!Error! Malloc failed for PRG-RAM");
         exit(EXIT_FAILURE);
     }
+
+    memset(pCartridge -> prg_ram, 0, KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes));
+
     printf("Allocated %dKiB for PRG-RAM\n", pCartridge -> header.ines_header -> prg_ram_size_bytes);
 
     if(pCartridge -> header.chr_rom_size_bytes == 0){
@@ -309,6 +312,9 @@ cartrige read_allocate_cartridge(const char* cartridge_path){
         }
         printf("Allocated %dKiB for CHR-ROM\n", pCartridge -> header.chr_rom_size_bytes);
     }
+
+    printf("Allocated %u KiB (%u bytes) of PRG-RAM\n",
+           KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes), pCartridge -> header.ines_header -> prg_ram_size_bytes);
 
     uint32_t offset = 16;
     if(pCartridge -> header.has_trainer == true) {
@@ -391,4 +397,29 @@ void free_cartridge(cartrige pCartridge){
     }
     free(pCartridge);
     printf("Struct freed");
+}
+
+/**
+ * Print a log of the cartridge passed by arg
+ * @param pCartridge a Cartridge struct
+ */
+void print_info(cartrige pCartridge){
+    printf("=== Cartridge Info ===\n"
+           "Mapper:      %d\n"
+           "Mirroring:   %s\n"
+           "Trainer:     %s\n"
+           "Battery:     %s\n"
+           "PRG-ROM:     %d bytes\n"
+           "CHR-ROM:     %d bytes\n"
+           "PRG-RAM:     %d bytes\n"
+           "CHR-RAM:     %d bytes\n"
+           "=======================",
+           pCartridge -> header.mapper_id,
+           get_mirroring(pCartridge -> header.mirroring),
+           pCartridge -> header.has_trainer ? "Yes" : "No",
+           pCartridge -> header.has_battery ? "Yes" : "No",
+           KIB(pCartridge -> header.prg_rom_size_bytes),
+           KIB(pCartridge -> header.chr_rom_size_bytes),
+           KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes),
+           pCartridge -> chr_ram == NULL ? 0 : KIB(8));
 }

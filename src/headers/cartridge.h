@@ -102,4 +102,10 @@ cartrige read_allocate_cartridge(const char* cartridge_path);
  */
 void free_cartridge(cartrige pCartridge);
 
+/**
+ * Print a log of the cartridge passed by arg
+ * @param pCartridge a Cartridge struct
+ */
+void print_info(cartrige pCartridge);
+
 #endif //EASYNES_CARTRIDGE_H

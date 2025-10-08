@@ -12,6 +12,8 @@ int main(int argc, char const *argv[]) {
 
     pCartridge = read_allocate_cartridge(argv[1]);
 
+    print_info(pCartridge);
+
     free_cartridge(pCartridge);
     log_stop();
     return 0;
