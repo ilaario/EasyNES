@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cartrige.h"
+#include "cartridge.h"
 #include "logger.h"
 
 #define ANSI_RED   "\x1b[31m"

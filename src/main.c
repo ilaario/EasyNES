@@ -34,48 +34,36 @@ const char* get_mirroring(enum mirror_type mirror)
     }
 }
 
-/*
-   function load_cartridge(path) -> Cartridge or error:
-    file = read_all(path)
-    if size(file) < 16: error
-
-    hdr = parse_ines_header(file[0..15])
-
-    meta = derive_meta_from_header(hdr)
-
-    cursor = 16
-    if meta.has_trainer:
-        trainer = copy(file[cursor .. cursor+512]); cursor += 512
-    else:
-        trainer = NULL
-
-    if size(file) < cursor + meta.prg_rom_size + meta.chr_rom_size: error
-
-    prg_rom = copy(file[cursor .. cursor+meta.prg_rom_size])
-    cursor += meta.prg_rom_size
-
-    if meta.chr_rom_size > 0:
-        chr_rom = copy(file[cursor .. cursor+meta.chr_rom_size])
-        cursor += meta.chr_rom_size
-        chr_ram = NULL
-    else:
-        chr_rom = NULL
-        chr_ram = alloc(meta.chr_ram_size) // inizializza a 0
-
-    // PRG-RAM
-    prg_ram = (meta.prg_ram_size > 0) ? alloc(meta.prg_ram_size) : NULL
-
-    return Cartridge{
-        header = hdr,
-        meta = meta,
-        prg_rom = prg_rom,
-        chr_rom = chr_rom,
-        trainer = trainer,
-        prg_ram = prg_ram,
-        chr_ram = chr_ram,
-        mapper_state = NULL
-    }
+/**
+ * Return the string representing the Format type in Flag 7 of the header
+ * @param format the enum value
+ * @return A string, representing the format type
  */
+const char* get_format(enum nes_rom_format format)
+{
+    switch (format)
+    {
+        case 0: return "NES_FORMAT_INES1";
+        case 1: return "NES_FORMAT_NES20";
+        case 2: return "NES_FORMAT_UNKNOWN";
+    }
+}
+
+/**
+ * Return the string representing the type in Flag 7 of the header
+ * @param format the enum value
+ * @return A string, representing the type
+ */
+const char* get_type(enum vs_playchoice type)
+{
+    switch (type)
+    {
+        case 0: return "NES_STANDARD";
+        case 1: return "VS_SYSTEM";
+        case 2: return "PLAYCHOICE";
+    }
+}
+
 cartrige read_allocate_cartridge(char* cartridge_path){
     cartridge_pointer = (FILE*)fopen(cartridge_path, "rb");
     if(cartridge_pointer == NULL){
@@ -107,13 +95,6 @@ cartrige read_allocate_cartridge(char* cartridge_path){
         exit(EXIT_FAILURE);
     }
     printf("Read %dKiB of PRG-ROM (%d Slots * 16KiB)\n", pCartridge -> header.prg_rom_size_bytes, pCartridge -> header.raw_header[4]);
-    printf("Allocating PRG-ROM...\n");
-    pCartridge -> prg_rom = (uint8_t*)malloc(KIB(pCartridge -> header.prg_rom_size_bytes));
-    if(pCartridge -> prg_rom == NULL){
-        perror("!Error! Malloc failed for PRG-ROM");
-        exit(EXIT_FAILURE);
-    }
-    printf("Allocated %dKiB for PRG-ROM\n", pCartridge -> header.prg_rom_size_bytes);
 
     printf("Reading CHR-ROM size...");
     pCartridge -> header.chr_rom_size_bytes = pCartridge -> header.raw_header[5] * 8;
@@ -122,13 +103,6 @@ cartrige read_allocate_cartridge(char* cartridge_path){
         pCartridge -> chr_rom = NULL;
     } else {
         printf("Read %dKiB of CHR-ROM (%d Slots * 8KiB)\n", pCartridge -> header.chr_rom_size_bytes, pCartridge -> header.raw_header[5]);
-        printf("Allocating CHR-ROM...\n");
-        pCartridge -> chr_rom = (uint8_t*)malloc(KIB(pCartridge -> header.chr_rom_size_bytes));
-        if(pCartridge -> chr_rom == NULL){
-            perror("!Error! Malloc failed for CHR-ROM");
-            exit(EXIT_FAILURE);
-        }
-        printf("Allocated %dKiB for CHR-ROM\n", pCartridge -> header.chr_rom_size_bytes);
     }
 
     printf("Reading Flag 6 byte...\n");
@@ -140,8 +114,7 @@ cartrige read_allocate_cartridge(char* cartridge_path){
     pCartridge -> header.has_battery    = (pCartridge -> header.flags6 & 0x02) != 0;
     pCartridge -> header.has_trainer    = (pCartridge -> header.flags6 & 0x04) != 0;
     pCartridge -> header.mirroring      = ver_flip + mirror_4scr;
-
-    pCartridge -> header.mapper_id       = (pCartridge -> header.flags6 & 0xF0) >> 4;
+    pCartridge -> header.mapper_id      = (pCartridge -> header.flags6 & 0xF0) >> 4;
 
     if(!pCartridge -> header.has_trainer) {
         pCartridge -> trainer = NULL;
@@ -157,8 +130,91 @@ cartrige read_allocate_cartridge(char* cartridge_path){
            "Mirroring Type = %s\n"
            "Battery present = %d\n"
            "Trainer present = %d\n"
-           "Mapper ID = 0x%02X",
+           "Mapper ID (Low Nibble) = 0x%02X",
            get_mirroring(pCartridge -> header.mirroring), pCartridge -> header.has_battery, pCartridge -> header.has_trainer, pCartridge -> header.mapper_id);
+
+    printf("Reading Flag 7...");
+    pCartridge -> header.flags7 = pCartridge -> header.raw_header[7];
+
+    pCartridge -> header.type       = (pCartridge -> header.flags7 & 0x03);
+    pCartridge -> header.format     = (pCartridge -> header.flags7 & 0x0C);
+    pCartridge -> header.mapper_id  = (pCartridge -> header.flags7 & 0xF0) | pCartridge -> header.mapper_id;
+
+    printf("Done reading Flag 7. Summary:\n"
+           "Cartridge type = %s\n"
+           "Cartridge format = %s\n"
+           "Mapper ID (Full) = 0x%02X",
+           get_type(pCartridge -> header.type), get_format(pCartridge -> header.format), pCartridge -> header.mapper_id);
+
+    if(pCartridge -> header.format == NES_FORMAT_INES1){
+        pCartridge -> header.nes2_header = NULL;
+        pCartridge -> header.ines_header = (struct ines_header*)malloc(sizeof(struct ines_header));
+        if(pCartridge -> header.ines_header == NULL) {
+            perror("!Error! Failed allocation of iNES Header");
+            exit(EXIT_FAILURE);
+        }
+        printf("Reading PRG-RAM size...");
+        pCartridge -> header.ines_header -> prg_ram_size_bytes = (pCartridge -> header.raw_header[8] == 0 ? 8 : pCartridge -> header.raw_header[8] * 8);
+        printf("Read %dKiB of PRG-RAM (%d Slots * 8KiB)",  pCartridge -> header.ines_header -> prg_ram_size_bytes, pCartridge -> header.raw_header[8]);
+
+        printf("Reading TV System...");
+        pCartridge -> header.ines_header->tv_format = pCartridge -> header.raw_header[9] & 0x01; // 0 = NTSC, 1 = PAL
+        printf("Found %s TV System", pCartridge -> header.ines_header->tv_format == 0 ? "NTSC" : "PAL");
+
+        printf("Checking padding emptiness...");
+        pCartridge -> header.ines_header->padding = 0;
+        for (int i = 11; i <= 15; i++){
+            pCartridge -> header.ines_header->padding = (pCartridge -> header.ines_header->padding << 4) | pCartridge -> header.raw_header[i];
+            // printf("?DEBUG? Padding = %d, value read = 0x%02X", pCartridge -> header.ines_header->padding, pCartridge -> header.raw_header[i]);
+        }
+
+        if(pCartridge -> header.ines_header->padding != 0) {
+            perror("!Warning! Padding not empty");
+        } else {
+            printf("Found empty padding");
+        }
+
+    } else if (pCartridge -> header.format == NES_FORMAT_NES20){
+        pCartridge -> header.ines_header = NULL;
+    } else {
+        perror("!Error! Unknown cartrige type");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Allocating PRG-ROM...\n");
+    pCartridge -> prg_rom = (uint8_t*)malloc(KIB(pCartridge -> header.prg_rom_size_bytes));
+    if(pCartridge -> prg_rom == NULL){
+        perror("!Error! Malloc failed for PRG-ROM");
+        exit(EXIT_FAILURE);
+    }
+    printf("Allocated %dKiB for PRG-ROM\n", pCartridge -> header.prg_rom_size_bytes);
+
+    printf("Allocating PRG-RAM...\n");
+    pCartridge -> prg_ram = (uint8_t*)malloc(KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes));
+    if(pCartridge -> prg_ram == NULL){
+        perror("!Error! Malloc failed for PRG-RAM");
+        exit(EXIT_FAILURE);
+    }
+    printf("Allocated %dKiB for PRG-RAM\n", pCartridge -> header.ines_header -> prg_ram_size_bytes);
+
+    if(pCartridge -> header.chr_rom_size_bytes == 0){
+        pCartridge -> chr_rom = NULL;
+        printf("No need to allocate CHR-ROM\nAllocating CHR-RAM instead...");
+        pCartridge -> chr_ram = (uint8_t*)malloc(KIB(8));
+        if(pCartridge -> chr_ram == NULL){
+            perror("!Error! Malloc failed for CHR-RAM");
+            exit(EXIT_FAILURE);
+        }
+        printf("Allocated %dKiB for CHR-RAM\n", 8);
+    } else {
+        printf("Allocating CHR-ROM...\n");
+        pCartridge -> chr_rom = (uint8_t*)malloc(KIB(pCartridge -> header.chr_rom_size_bytes));
+        if(pCartridge -> chr_rom == NULL){
+            perror("!Error! Malloc failed for CHR-ROM");
+            exit(EXIT_FAILURE);
+        }
+        printf("Allocated %dKiB for CHR-ROM\n", pCartridge -> header.chr_rom_size_bytes);
+    }
 
     return pCartridge;
 }
@@ -168,6 +224,19 @@ int main() {
     pCartridge = read_allocate_cartridge("test/The_Legend_of_Zelda.nes");
 
     free(pCartridge -> prg_rom);
+    free(pCartridge -> prg_ram);
+    if(pCartridge -> chr_rom != NULL) {
+        free(pCartridge -> chr_rom);
+    }
+    if(pCartridge -> chr_ram != NULL) {
+        free(pCartridge -> chr_ram);
+    }
+    if(pCartridge -> header.nes2_header != NULL) {
+        free(pCartridge -> header.nes2_header);
+    }
+    if(pCartridge -> header.ines_header != NULL) {
+        free(pCartridge -> header.ines_header);
+    }
     free(pCartridge);
     log_stop();
     return 0;
