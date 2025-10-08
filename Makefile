@@ -21,7 +21,7 @@ compile_lib:
 
 compile:
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(BUILD_DIR)/easynes $(SRC_DIR)/main.c $(LIB)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/easynes $(SRC_DIR)/cartridge.c $(SRC_DIR)/main.c   $(LIB)
 
 compile_debug:
 	mkdir -p $(BUILD_DIR)
