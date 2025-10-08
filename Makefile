@@ -12,7 +12,7 @@ all: compile clear
 
 run: compile_lib compile
 	# clear
-	$(BUILD_DIR)/easynes test/The_Legend_of_Zelda.nes
+	$(BUILD_DIR)/easynes test/Zelda_II_The_Adventure_of_Link.nes
 
 compile_lib:
 	$(CC) -c $(SRC_DIR)/logger.c -o $(SRC_DIR)/logger.o

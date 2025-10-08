@@ -64,7 +64,12 @@ const char* get_type(enum vs_playchoice type)
     }
 }
 
-cartrige read_allocate_cartridge(char* cartridge_path){
+/**
+ * Read the .nes file and allocate the amount of memory required in the header
+ * @param cartridge_path The path pointing the .nes file
+ * @return a Cartridge struct
+ */
+cartrige read_allocate_cartridge(const char* cartridge_path){
     cartridge_pointer = (FILE*)fopen(cartridge_path, "rb");
     if(cartridge_pointer == NULL){
         perror("!Error! - Invalid read");
@@ -176,6 +181,8 @@ cartrige read_allocate_cartridge(char* cartridge_path){
 
     } else if (pCartridge -> header.format == NES_FORMAT_NES20){
         pCartridge -> header.ines_header = NULL;
+        perror("!Warning! NES2.0 is still not supported, WIP");
+        exit(EXIT_FAILURE);
     } else {
         perror("!Error! Unknown cartrige type");
         exit(EXIT_FAILURE);
@@ -207,6 +214,7 @@ cartrige read_allocate_cartridge(char* cartridge_path){
         }
         printf("Allocated %dKiB for CHR-RAM\n", 8);
     } else {
+        pCartridge -> chr_ram = NULL;
         printf("Allocating CHR-ROM...\n");
         pCartridge -> chr_rom = (uint8_t*)malloc(KIB(pCartridge -> header.chr_rom_size_bytes));
         if(pCartridge -> chr_rom == NULL){
@@ -216,12 +224,71 @@ cartrige read_allocate_cartridge(char* cartridge_path){
         printf("Allocated %dKiB for CHR-ROM\n", pCartridge -> header.chr_rom_size_bytes);
     }
 
+    uint32_t offset = 16;
+    if(pCartridge -> header.has_trainer == true) {
+        pCartridge -> trainer = (uint8_t*)malloc(512);
+        size_t trainer_read = fread(pCartridge -> trainer, 1, 512, cartridge_pointer);
+        if(trainer_read != 512){
+            perror("!Error! Failed reading of trainer");
+            exit(EXIT_FAILURE);
+        }
+        offset += 512;
+    } else {
+        pCartridge -> trainer = NULL;
+    }
+
+    uint32_t pgr_rom_start   = offset;
+    uint32_t pgr_rom_end     = pgr_rom_start + KIB(pCartridge -> header.prg_rom_size_bytes);
+
+    printf("Offset for PGR-ROM = (%d -> %d)", pgr_rom_start, pgr_rom_end);
+
+    size_t prgrom_read = fread(pCartridge -> prg_rom, 1, KIB(pCartridge -> header.prg_rom_size_bytes), cartridge_pointer);
+    if(prgrom_read < pCartridge -> header.prg_rom_size_bytes){
+        perror("!Error! Failed reading PGR-ROM");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Read and copied %dKiB from cartridge to PGR-ROM", prgrom_read / 1024);
+
+    uint32_t chr_rom_start   = pgr_rom_end;
+    uint32_t chr_rom_end     = chr_rom_start + KIB(pCartridge -> header.chr_rom_size_bytes);
+
+    printf("Offset for CHR-ROM = (%d -> %d)", chr_rom_start, chr_rom_end);
+
+    if(pCartridge -> header.chr_rom_size_bytes > 0){
+        size_t chrrom_read = fread(pCartridge -> chr_rom, 1, KIB(pCartridge -> header.chr_rom_size_bytes), cartridge_pointer);
+        if(chrrom_read < pCartridge -> header.chr_rom_size_bytes){
+            perror("!Error! Failed reading PGR-ROM");
+            exit(EXIT_FAILURE);
+        }
+
+        printf("Read and copied %dKiB from cartridge to CHR-ROM", chrrom_read / 1024);
+    }
+
+    rewind(cartridge_pointer);
+
+    fseek(cartridge_pointer, 0L, SEEK_END);
+    size_t sz = ftell(cartridge_pointer);
+
+    if(chr_rom_end > sz){
+        perror("!Error! Segmentation fault, read went over file size");
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(cartridge_pointer);
+
     return pCartridge;
 }
 
-int main() {
+int main(int argc, char const *argv[]) {
     log_init("log/easynes.log");
-    pCartridge = read_allocate_cartridge("test/The_Legend_of_Zelda.nes");
+
+    if (argc != 2) {
+        fprintf(stderr, "Usage: <game>.nes\n");
+        return EXIT_FAILURE;
+    }
+
+    pCartridge = read_allocate_cartridge(argv[1]);
 
     free(pCartridge -> prg_rom);
     free(pCartridge -> prg_ram);
@@ -236,6 +303,9 @@ int main() {
     }
     if(pCartridge -> header.ines_header != NULL) {
         free(pCartridge -> header.ines_header);
+    }
+    if(pCartridge -> trainer != NULL) {
+        free(pCartridge -> trainer);
     }
     free(pCartridge);
     log_stop();
