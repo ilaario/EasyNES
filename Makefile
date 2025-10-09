@@ -5,7 +5,7 @@ SRC_DIR = src
 BUILD_DIR = build
 GFLAGS_DEBUG = $(CFLAGS) -g -O0 -Wall -D DEBUGLOG
 DEBUG = gdb
-LIB = -L$(SRC_DIR) -llogger
+LIB = -L$(BUILD_DIR) -llogger
 AR = ar
 
 all: compile clear
@@ -15,13 +15,13 @@ run: compile_lib compile
 	$(BUILD_DIR)/easynes test/Zelda_II_The_Adventure_of_Link.nes
 
 compile_lib:
-	$(CC) -c $(SRC_DIR)/logger.c -o $(SRC_DIR)/logger.o
-	$(AR) rcs $(SRC_DIR)/liblogger.a $(SRC_DIR)/logger.o
-	rm -rf $(SRC_DIR)/logger.o
+	$(CC) -c $(SRC_DIR)/logger.c -o $(BUILD_DIR)/logger.o
+	$(AR) rcs $(BUILD_DIR)/liblogger.a $(BUILD_DIR)/logger.o
+	rm -rf $(BUILD_DIR)/logger.o
 
 compile:
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(BUILD_DIR)/easynes $(SRC_DIR)/cartridge.c $(SRC_DIR)/main.c   $(LIB)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/easynes $(SRC_DIR)/cartridge.c $(SRC_DIR)/controller.c $(SRC_DIR)/mapper.c $(SRC_DIR)/ppu.c $(SRC_DIR)/bus.c $(SRC_DIR)/main.c   $(LIB)
 
 compile_debug:
 	mkdir -p $(BUILD_DIR)

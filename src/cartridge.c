@@ -155,7 +155,7 @@ const char* get_type(enum vs_playchoice type)
  * @param cartridge_path The path pointing the .nes file
  * @return a Cartridge struct
  */
-cartrige read_allocate_cartridge(const char* cartridge_path){
+cartridge read_allocate_cartridge(const char* cartridge_path){
     cartridge_pointer = (FILE*)fopen(cartridge_path, "rb");
     if(cartridge_pointer == NULL){
         perror("!Error! - Invalid read");
@@ -164,7 +164,7 @@ cartrige read_allocate_cartridge(const char* cartridge_path){
 
     printf("NES cartridge file loaded\nReading header file...\n");
 
-    cartrige pCartridge = (cartrige)malloc(sizeof(struct Cartridge) + 1);
+    cartridge pCartridge = (cartridge)malloc(sizeof(struct Cartridge) + 1);
     if(pCartridge == NULL) {
         perror("!Error! - Invalid malloc");
         exit(EXIT_FAILURE);
@@ -376,7 +376,7 @@ cartrige read_allocate_cartridge(const char* cartridge_path){
  * Free the struct cartridge passed by arg
  * @param pCartridge the struct to free
  */
-void free_cartridge(cartrige pCartridge){
+void free_cartridge(cartridge pCartridge){
     printf("Freeing the struct...");
     free(pCartridge -> prg_rom);
     free(pCartridge -> prg_ram);
@@ -403,7 +403,7 @@ void free_cartridge(cartrige pCartridge){
  * Print a log of the cartridge passed by arg
  * @param pCartridge a Cartridge struct
  */
-void print_info(cartrige pCartridge){
+void print_info(cartridge pCartridge){
     printf("=== Cartridge Info ===\n"
            "Mapper:      %d\n"
            "Mirroring:   %s\n"

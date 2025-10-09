@@ -87,25 +87,25 @@
 #endif
 
 
-typedef struct Cartridge* cartrige;
+typedef struct Cartridge* cartridge;
 
 /**
  * Read the .nes file and allocate the amount of memory required in the header
  * @param cartridge_path The path pointing the .nes file
  * @return a Cartridge struct
  */
-cartrige read_allocate_cartridge(const char* cartridge_path);
+cartridge read_allocate_cartridge(const char* cartridge_path);
 
 /**
  * Free the struct cartridge passed by arg
  * @param pCartridge the struct to free
  */
-void free_cartridge(cartrige pCartridge);
+void free_cartridge(cartridge pCartridge);
 
 /**
  * Print a log of the cartridge passed by arg
  * @param pCartridge a Cartridge struct
  */
-void print_info(cartrige pCartridge);
+void print_info(cartridge pCartridge);
 
 #endif //EASYNES_CARTRIDGE_H

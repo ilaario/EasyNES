@@ -12,6 +12,11 @@
 #include <string.h>
 
 #include "cartridge.h"
+#include "bus.h"
+#include "controller.h"
+#include "mapper.h"
+#include "ppu.h"
+
 #include "logger.h"
 
 #define ANSI_RED   "\x1b[31m"
