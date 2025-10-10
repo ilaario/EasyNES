@@ -66,6 +66,7 @@ bool     ppu_nmi_pending(ppu ppu);
 void     ppu_clear_nmi(ppu ppu);
 
 void ppu_tick(ppu ppu, uint64_t cpu_cycles);
+void step_one_ppu_cycle(ppu ppu);
 
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot);
 

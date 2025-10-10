@@ -300,7 +300,7 @@ void copy_vertical_t_to_v(ppu ppu){
 // Called in step_one_ppu_cycle() after VBlank/NMI signal
 void handle_scroll_increments(ppu ppu){
     if(!rendering_enabled(ppu)) return;
-    if((ppu -> dot >= 1 && ppu -> dot <= 256) || (ppu -> dot >= 321 && ppu -> dot <= 336)){
+    if((ppu -> dot >= 1 && ppu -> dot <= 255) || (ppu -> dot >= 321 && ppu -> dot <= 336)){
         if((ppu -> dot % 8) == 0) increment_coarse_x(ppu);
     }
     if(ppu -> dot == 256) increment_y(ppu);
@@ -362,8 +362,12 @@ void ppu_clear_nmi(ppu ppu){
 
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot){
     const int32_t CYC_LINE = 341;
-    int32_t ppu_cycle = scanline * CYC_LINE + dot;
-    for(int i = 0; i < ppu_cycle; i++){
+    int32_t target = scanline * CYC_LINE + dot;
+    int32_t current = ppu->scanline * CYC_LINE + ppu->dot;
+    int32_t remain = target - current;
+    if (remain < 0) remain = 0;  // (o fai wrap a nuovo frame, a tua scelta)
+
+    for (int i = 0; i < remain; i++){
         step_one_ppu_cycle(ppu);
     }
 }

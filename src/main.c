@@ -102,9 +102,95 @@ int main(int argc, char const *argv[]) {
     ppu1 -> v = 0x0005;
     DEBUG_goto_scanline_dot(ppu1, 0, 8);
     printf("PPU -> V = 0x%04X (Should be 0x0006)", ppu1 -> v);
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);
     ppu1 -> v = 0x001F;
-    DEBUG_goto_scanline_dot(ppu1, 0, 16);
+    DEBUG_goto_scanline_dot(ppu1, 0, 8);      // primo boundary (wrap → 0x0400)
     printf("PPU -> V = 0x%04X (Should be 0x0400)", ppu1 -> v);
+    DEBUG_goto_scanline_dot(ppu1, 0, 16);     // secondo boundary (→ 0x0401)
+    printf("PPU -> V = 0x%04X (Should be 0x0401)", ppu1 -> v);
+
+    printf("Testing vertical increment...");
+
+// ===== Caso 1: fineY < 7 ⇒ fineY++ =====
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x00);               // rendering OFF (niente inc X)
+    ppu1->v = (0x3000) | (10 << 5) | 0x00;                          // fineY=3, coarseY=10, coarseX=0, NTX/NTY=0
+    DEBUG_goto_scanline_dot(ppu1, 0, 255);     // fermati PRIMA del 256
+
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);            // rendering ON solo per il ciclo 256
+    step_one_ppu_cycle(ppu1);                               // esegue dot=256 ⇒ SOLO increment_y
+    printf("PPU -> V = 0x%04X (Should be 0x%04X)\n",
+           ppu1->v, (0x4000 | (10 << 5)));                       // 0x4140 atteso
+
+// ===== Caso 2: fineY = 7 ⇒ carry su coarseY =====
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x00);            // rendering OFF
+    ppu1->v = (0x7000) | (12 << 5) | 0x00;                       // fineY=7, coarseY=12, coarseX=0
+    DEBUG_goto_scanline_dot(ppu1, 0, 255);
+
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);             // ON solo per il 256
+    step_one_ppu_cycle(ppu1);                                // dot=256 ⇒ fineY=0, coarseY=13
+    printf("PPU -> V = 0x%04X (Should be 0x%04X)",
+           ppu1->v, (0x0000 | (13 << 5)));
+
+// ===== Caso 3: coarseY = 29 ⇒ 0 e toggle NTY =====
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);
+    ppu1 -> v = 0x7000 | (29 << 5);
+    DEBUG_goto_scanline_dot(ppu1, 0, 256);
+    printf("PPU -> V = 0x%04X (Should be 0x0000)\n",
+           (ppu1->v & 0x03E0));
+    printf("NTY = %s (Should be false)\n",
+           (ppu1->v & 0x0800) == 0 ? "True" : "False");
+
+// ===== Caso 4: coarseY = 31 ⇒ 0 senza toggle NTY =====
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);
+    ppu1 -> v = 0x7000 | (31 << 5);
+    DEBUG_goto_scanline_dot(ppu1, 0, 256);
+    printf("PPU -> V = 0x%04X (Should be 0x0000)\n",
+           (ppu1->v & 0x03E0));
+    printf("NTY = %s (Should be true)\n",
+           (ppu1->v & 0x0800) == 0 ? "True" : "False");
+
+    printf("Vertical copy on pre-render...");
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);
+    ppu1 -> t = 0x7000 | 0x0800 | (17 << 5);
+    DEBUG_goto_scanline_dot(ppu1, 261, 304);
+    printf("PPU -> V == PPU -> T is %s (Should be true)",
+           (ppu1 -> v & 0x7BE0) == (ppu1 -> t & 0x7BE0) ? "True" : "False");
+
+    printf("Testing full scroll sequence on the same line...");
+    ppu_reset(ppu1);
+    bus_cpu_write8(CPUbus, 0x2001, 0x00);
+    DEBUG_goto_scanline_dot(ppu1, 5, 7);
+    ppu1->v = 0x001F;
+    bus_cpu_write8(CPUbus, 0x2001, 0x08);
+    step_one_ppu_cycle(ppu1);
+    printf("PPU -> V = 0x%04X (Should be 0x0400)\n", ppu1->v);
+
+    printf(" ====================== OAMDMA TEST ====================== ");
+    printf("Testing OAMADDR and OAMDATA sequence...");
+    ppu_reset(ppu1);
+
+    bus_cpu_write8(CPUbus, 0x2003, 0xFC);      // OAMADDR=0xFC
+    bus_cpu_write8(CPUbus, 0x2004, 0x11);
+    bus_cpu_write8(CPUbus, 0x2004, 0x22);
+    bus_cpu_write8(CPUbus, 0x2004, 0x33);
+    bus_cpu_write8(CPUbus, 0x2004, 0x44);
+
+    printf("PPU -> OAMADDR   = 0x%02X (Should be 0x00)", ppu1 -> oamaddr);
+    printf("PPU -> OAM[0xFC] = 0x%02X (Should be 0x11)", ppu1 -> oam[0xFC]);
+    printf("PPU -> OAM[0xFD] = 0x%02X (Should be 0x22)", ppu1 -> oam[0xFD]);
+    printf("PPU -> OAM[0xFE] = 0x%02X (Should be 0x33)", ppu1 -> oam[0xFE]);
+    printf("PPU -> OAM[0xFD] = 0x%02X (Should be 0x44)", ppu1 -> oam[0xFF]);
+    printf("Read on 0x2004 = 0x%02X, Read on PPU -> OAM[0x00] = 0x%02X",
+           bus_cpu_read8(CPUbus, 0x2004), ppu1 -> oam[0x00]);
+
+
+
 
 
 

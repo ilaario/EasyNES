@@ -15,6 +15,7 @@ run: compile_lib compile
 	$(BUILD_DIR)/easynes test/Zelda_II_The_Adventure_of_Link.nes
 
 compile_lib:
+	mkdir -p $(BUILD_DIR)
 	$(CC) -c $(SRC_DIR)/logger.c -o $(BUILD_DIR)/logger.o
 	$(AR) rcs $(BUILD_DIR)/liblogger.a $(BUILD_DIR)/logger.o
 	rm -rf $(BUILD_DIR)/logger.o
