@@ -79,11 +79,11 @@ void bus_cpu_write8(bus bus, uint16_t addr, uint8_t value){
         apu_stub_write(addr, value);
     } else if(addr == 0x4014){
         start_oam_dma(bus, value);
+        bus -> dma_active = true;
     } else if(addr == 0x4016){
         controller_write_strobe(bus -> pad1, value & 0x01);
-        controller_write_strobe(bus -> pad2, value & 0x01);
     } else if(addr == 0x4017){
-
+        controller_write_strobe(bus -> pad2, value & 0x01);
     } else if(addr >= 0x4020 && addr <= 0x5FFF){
 
     } else if(addr >= 0x6000){
@@ -124,9 +124,9 @@ int bus_tick_dma_if_active(bus bus, /*maybe*/ uint64_t cpu_cycle){
 
     int cycle = 0;
 
-    if(bus -> dma_even_cycle) {
+    if(bus -> dma_even_cycle == false) {
         cycle += 1;
-        bus -> dma_even_cycle = false;
+        bus -> dma_even_cycle = true;
     }
 
     while(bus -> dma_index < 256) {

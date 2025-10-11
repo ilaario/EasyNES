@@ -13,6 +13,9 @@
 #include "mapper.h"      // espone mapper->cpu_read/cpu_write
 #include "controller.h"  // espone write_strobe/read_shift
 
+struct CPU;
+typedef struct CPU* cpu;
+
 struct PPU;
 struct Mapper;
 struct Controller;

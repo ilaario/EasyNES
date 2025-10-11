@@ -16,6 +16,7 @@
 #include "controller.h"
 #include "mapper.h"
 #include "ppu.h"
+#include "emu.h"
 
 #include "logger.h"
 
