@@ -12,11 +12,6 @@
 
 struct Mapper;
 
-enum mirror_type {
-    MIRROR_VERTICAL,
-    MIRROR_HORIZONTAL,
-    MIRROR_FOUR_SCREEN
-};
 struct PPU {
     uint16_t v, t;            // current/temporary VRAM address
     uint8_t  x;               // fine X (3 bit)
@@ -67,6 +62,9 @@ void     ppu_clear_nmi(ppu ppu);
 
 void ppu_tick(ppu ppu, uint64_t cpu_cycles);
 void step_one_ppu_cycle(ppu ppu);
+
+void ppu_write(ppu ppu, uint16_t addr, uint16_t value);
+uint8_t ppu_read(ppu ppu, uint16_t addr);
 
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot);
 

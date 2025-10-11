@@ -6,89 +6,6 @@
 
 FILE* cartridge_pointer;
 
-// file format, could be INES1 or NES2.0
-enum nes_rom_format {
-    NES_FORMAT_INES1 = 0,
-    NES_FORMAT_NES20 = 1,
-    NES_FORMAT_UNKNOWN = 2
-};
-
-enum mirror_type {
-    MIRROR_VERTICAL,
-    MIRROR_HORIZONTAL,
-    MIRROR_FOUR_SCREEN
-};
-
-enum vs_playchoice {
-    NES_STANDARD,
-    VS_SYSTEM,
-    PLAYCHOICE
-};
-
-struct ines_header{
-    uint32_t prg_ram_size_bytes;    // 0 => default 8KiB
-    uint8_t tv_format;              // 0 = NTSC, 1 = PAL
-    uint8_t playchoice10_flag;      // In alcune ROM 0 = nessuno, 1 = PlayChoice-10.
-    int padding;                    // Dovrebbe essere vuoto, se contiene qualcosa, lettura sbagliata della cartuccia
-};
-
-struct nes2_header{
-    uint8_t flag8;
-    uint8_t flag9;
-    uint8_t flag10;
-    uint8_t flag11;
-
-    uint8_t submapper_id;
-
-    uint8_t prg_ram_shift;
-    uint8_t prg_nvram_shift;
-
-    uint8_t chr_ram_shift;
-    uint8_t chr_nvram_shift;
-};
-
-struct cartridge_header {
-    // contains the raw header readed from the cartrige file
-    uint8_t raw_header[16];
-    struct nes2_header* nes2_header;
-    struct ines_header* ines_header;
-
-    // signature
-    bool valid_signature;           // "NES\x1A"
-    enum nes_rom_format format;     // iNES or NES2.0
-    enum vs_playchoice type;        // 00 = NES standard, 01 = VS System, 10 = PlayChoice-10
-
-    // required fields for INES1 cartrige types
-    uint8_t flags6;                 // header[6]
-    uint8_t flags7;                 // header[7]
-
-    // other fields
-    uint32_t prg_rom_size_bytes;    // units * 16KiB
-    uint32_t chr_rom_size_bytes;    // units * 8KiB
-
-    bool has_trainer;               // flags6 bit2
-    bool has_battery;               // flags6 bit1
-    enum mirror_type mirroring;     // orizz/vert/4-screen
-    uint16_t mapper_id;             // high nibble flags7 + low nibble flags6
-
-};
-
-struct Cartridge {
-    struct cartridge_header header;   // per debug/diagnostica
-
-    // Dati ROM caricati dal file (ownership tua)
-    uint8_t* prg_rom;    // size = meta.prg_rom_size
-    uint8_t* chr_rom;    // size = meta.chr_rom_size (NULL se uses_chr_ram)
-    uint8_t* trainer;    // size = 512 se presente, altrimenti NULL
-
-    // RAM allocate dall’emulatore
-    uint8_t* prg_ram;    // size = meta.prg_ram_size (anche 0 → NULL)
-    uint8_t* chr_ram;    // size = meta.chr_ram_size se uses_chr_ram, else NULL
-
-    // Stato mapper (per NROM è nullo; per altri mapper serviranno registri)
-    void* mapper_state;   // oppure una union/struct specifica per mapper 0/1/4…
-};
-
 /**
  * Read the first 4 bytes from the header [0x00000 ... 0x00003] and validate the signature.
  * The signature is read in Little Endian and it represent the string "NES\0x1A"
@@ -377,7 +294,6 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
  * @param pCartridge the struct to free
  */
 void free_cartridge(cartridge pCartridge){
-    printf("Freeing the struct...");
     free(pCartridge -> prg_rom);
     free(pCartridge -> prg_ram);
     if(pCartridge -> chr_rom != NULL) {
@@ -396,7 +312,6 @@ void free_cartridge(cartridge pCartridge){
         free(pCartridge -> trainer);
     }
     free(pCartridge);
-    printf("Struct freed");
 }
 
 /**
@@ -422,4 +337,66 @@ void print_info(cartridge pCartridge){
            KIB(pCartridge -> header.chr_rom_size_bytes),
            KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes),
            pCartridge -> chr_ram == NULL ? 0 : KIB(8));
+}
+
+/**
+ * Create a dummy cartridge for testing purpose
+ * @param prg_kib Value of KiB to allocate for PRG-ROM
+ * @param chr_kib Value of KiB to allocate for CHR-ROM/RAM
+ * @param has_prg_ram Indicate if the Cartridge have PRG-RAM
+ * @param chr_is_ram Indicate if the CHR is RAM or ROM
+ * @return A pointer to the dummy cartridge
+ */
+cartridge make_dummy(uint8_t prg_kib, uint8_t chr_kib, bool has_prg_ram, bool chr_is_ram){
+    cartridge cart = (cartridge)malloc(sizeof(struct Cartridge));
+    if(cart == NULL){
+        perror("Error allocating dummy cartridge");
+        exit(EXIT_FAILURE);
+    }
+
+    cart -> header.prg_rom_size_bytes = prg_kib;
+    cart -> header.chr_rom_size_bytes = chr_is_ram ? 0 : chr_kib;
+    cart -> header.ines_header = (struct ines_header*)malloc(sizeof(struct ines_header));
+    if(cart -> header.ines_header == NULL){
+        perror("Error allocating iNES header in dummy cartridge");
+        exit(EXIT_FAILURE);
+    }
+    cart -> header.ines_header -> prg_ram_size_bytes = has_prg_ram ? 8 : 0;
+    cart -> prg_rom = (uint8_t*)malloc(KIB(1024));
+    for(int i = 0; i < KIB(prg_kib); i++){
+        uint8_t bank = i / KIB(16);
+        cart -> prg_rom[i] = (bank == 0) ? (0xA0 + (i & 0x0F)) :
+                             (bank == 1) ? (0xB0 + (i & 0x0F)) :
+                                           (0xC0 + (i & 0x0F));
+    }
+    cart -> prg_ram = has_prg_ram ? (uint8_t*)malloc(KIB(8)) : NULL;
+    if(has_prg_ram && cart -> prg_ram == NULL){
+        perror("Error allocating PRG-RAM in dummy cartridge");
+        exit(EXIT_FAILURE);
+    }
+    if(has_prg_ram) memset(cart -> prg_ram, 0x00, KIB(8));
+
+    if(chr_is_ram){
+        cart -> chr_rom = NULL;
+        cart -> chr_ram = (uint8_t*)malloc(KIB(chr_kib));
+        if(cart -> chr_ram == NULL){
+            perror("Error allocating CHR-RAM in dummy cartridge");
+            exit(EXIT_FAILURE);
+        }
+        for(int i = 0; i < KIB(chr_kib); i++){
+            cart -> chr_ram[i] = (0xC0 + (i & 0x1F));
+        }
+    } else {
+        cart -> chr_ram = NULL;
+        cart -> chr_rom = (uint8_t*)malloc(KIB(chr_kib));
+        if(cart -> chr_rom == NULL){
+            perror("Error allocating CHR-ROM in dummy cartridge");
+            exit(EXIT_FAILURE);
+        }
+        for(int i = 0; i < KIB(chr_kib); i++){
+            cart -> chr_rom[i] = (0xD0 + (i & 0x1F));
+        }
+    }
+
+    return cart;
 }

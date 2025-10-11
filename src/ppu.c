@@ -93,7 +93,7 @@ uint8_t pal_index_fix(uint8_t addr){
 
 uint8_t ppu_read(ppu ppu, uint16_t addr){
     uint16_t a = addr & 0x3FFF;
-    if(a <= 0x1FFF) return 0x00; // mapper_chr_read(ppu -> mapper, a);
+    if(a <= 0x1FFF) return ppu -> mapper -> chr_read(ppu -> mapper, a);
     if(a <= 0x2FFF) return ppu -> ciram[nt_phys_index(ppu, a)];
     if(a <= 0x3FFF) return ppu -> ciram[nt_phys_index(ppu, a - 0x1000)];
     return ppu -> palette[pal_index_fix(a)];
@@ -101,7 +101,7 @@ uint8_t ppu_read(ppu ppu, uint16_t addr){
 
 void ppu_write(ppu ppu, uint16_t addr, uint16_t value){
     uint16_t a = addr & 0x3FFF;
-    if(a <= 0x1FFF) /* no-op */ // mapper_chr_write(ppu -> mapper, a, value);
+    if(a <= 0x1FFF) ppu -> mapper -> chr_write(ppu -> mapper, a, value);
     if(a <= 0x2FFF) ppu -> ciram[nt_phys_index(ppu, a)] = value;
     if(a <= 0x3FFF) ppu -> ciram[nt_phys_index(ppu, a - 0x1000)] = value;
     ppu -> palette[pal_index_fix(a)] = value;
