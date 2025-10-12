@@ -66,6 +66,9 @@ void step_one_ppu_cycle(ppu ppu);
 void ppu_write(ppu ppu, uint16_t addr, uint16_t value);
 uint8_t ppu_read(ppu ppu, uint16_t addr);
 
+// Riempi un buffer RGBA8888 256x240 con il frame corrente
+void ppu_get_frame_rgba(ppu ppu, uint32_t *dst_rgba);
+
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot);
 
 #endif //EASYNES_PPU_H

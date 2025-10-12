@@ -17,5 +17,5 @@ void controller_write_strobe(controller c, uint8_t bit0){
 }
 
 uint8_t controller_read_shift(controller c){
-
+    return 0;
 }

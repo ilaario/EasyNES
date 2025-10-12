@@ -1,9 +1,9 @@
 //
-// Created by Dario Bonfiglio on 10/4/25.
+// Created by Dario Bonfiglio on 10/12/25.
 //
 
-#ifndef EASYNES_MAIN_H
-#define EASYNES_MAIN_H
+#ifndef EASYNES_TEST_H
+#define EASYNES_TEST_H
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -21,8 +21,7 @@
 
 #include "logger.h"
 
-#define ANSI_RED   "\x1b[31m"
-#define ANSI_RESET "\x1b[0m"
+#define ANSI_GREEN "\033[32m"
 
 #define KIB(x) ((x) * 1024)
 
@@ -95,4 +94,8 @@
 #define log_stop() log_stop()
 #endif
 
-#endif //EASYNES_MAIN_H
+void test_setup(cpu cpu, bus bus, ppu ppu, mapper mapper, controller pad_1, controller pad_2);
+void run_ram_test();
+void run_all_tests();
+
+#endif //EASYNES_TEST_H

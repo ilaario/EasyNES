@@ -293,25 +293,26 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
  * Free the struct cartridge passed by arg
  * @param pCartridge the struct to free
  */
-void free_cartridge(cartridge pCartridge){
-    free(pCartridge -> prg_rom);
-    free(pCartridge -> prg_ram);
-    if(pCartridge -> chr_rom != NULL) {
-        free(pCartridge -> chr_rom);
+void free_cartridge(cartridge c) {
+    if (!c) return;
+
+    if (c->prg_rom) { free(c->prg_rom); c->prg_rom = NULL;}
+
+    if (c->prg_ram) {
+        free(c->prg_ram); c->prg_ram = NULL;
     }
-    if(pCartridge -> chr_ram != NULL) {
-        free(pCartridge -> chr_ram);
+
+    if (c->chr_rom == NULL) {
+        if (c->chr_ram) { free(c->chr_ram); c->chr_ram = NULL; }
+        // niente CHR-ROM
+        c->chr_rom = NULL;
+    } else {
+        if (c->chr_rom) { free(c->chr_rom); c->chr_rom = NULL; }
+        // niente CHR-RAM
+        c->chr_ram = NULL;
     }
-    if(pCartridge -> header.nes2_header != NULL) {
-        free(pCartridge -> header.nes2_header);
-    }
-    if(pCartridge -> header.ines_header != NULL) {
-        free(pCartridge -> header.ines_header);
-    }
-    if(pCartridge -> trainer != NULL) {
-        free(pCartridge -> trainer);
-    }
-    free(pCartridge);
+
+    free(c);
 }
 
 /**

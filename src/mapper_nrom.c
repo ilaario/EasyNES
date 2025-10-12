@@ -5,6 +5,8 @@
 
 #include "headers/mapper.h"
 
+static inline uint8_t safe_ff_if_null(const void *p) { return p ? 0 : 0xFF; }
+
 struct MapperNROM {
     // vtable (stessa firma di headers/mapper.h)
     struct Mapper base;
@@ -33,7 +35,11 @@ void nrom_reset(mapper m){
 }
 
 uint8_t nrom_cpu_read(mapper m, uint16_t addr){
+    if (!m) return 0xFF;
     mapperNROM n = as_nrom(m);
+    if (!n || !n->base.cart) return 0xFF;
+
+    cartridge c = n->base.cart;
 
     // $6000–$7FFF : PRG-RAM (se presente)
     if (addr < 0x6000) return 0xFF;
@@ -54,7 +60,10 @@ uint8_t nrom_cpu_read(mapper m, uint16_t addr){
 }
 
 void nrom_cpu_write(mapper m, uint16_t addr, uint8_t v){
+    if (!m) return;
     mapperNROM n = as_nrom(m);
+    if (!n || !n->base.cart) return;
+
     if((addr >= 0x6000 && addr <= 0x7FFF) && n -> base.cart -> prg_ram != NULL){
         n -> base.cart -> prg_ram[addr - 0x6000] = v;
     }
@@ -103,10 +112,28 @@ mapper mapper_nrom_create(cartridge cart){
     return (mapper)n;
 }
 
+static void nrom_configure_banks(struct MapperNROM *nm) {
+    cartridge c = nm->base.cart;
+    if (!c || !c->prg_rom) {
+        nm->prg_bank0_base = nm->prg_bank1_base = 0;
+        return;
+    }
+    if (c->header.prg_rom_size_bytes == 16) {           // NROM-128
+        nm->prg_bank0_base = 0;
+        nm->prg_bank1_base = 0;                        // mirror
+    } else {                                      // NROM-256
+        nm->prg_bank0_base = 0;
+        nm->prg_bank1_base = 16 * 1024;
+    }
+}
+
 void mapper_destroy(mapper m){
     free(as_nrom(m));
 }
 
-void DEBUG_change_cart(mapper m, cartridge cart){
-    m -> cart = cart;
+void mapper_nrom_attach(mapper m, cartridge c) {
+    struct MapperNROM *nm = (struct MapperNROM *)m;
+    nm -> base.cart = c;
+    nrom_configure_banks(nm);
 }
+

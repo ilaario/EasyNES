@@ -37,6 +37,7 @@ struct CPUBus {
 typedef struct CPUBus* bus;
 
 void bus_init(bus bus, ppu ppu, mapper mapper, controller pad1, controller pad2);
+void bus_reset(bus bus);
 
 uint8_t  bus_cpu_read8 (bus bus, uint16_t addr);
 void     bus_cpu_write8(bus, uint16_t addr, uint8_t value);

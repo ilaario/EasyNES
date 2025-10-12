@@ -50,7 +50,7 @@ uint8_t bus_cpu_read8 (bus bus, uint16_t addr){
     if(addr <= 0x1FFF) {
         return bus -> ram[addr & 0x07FF];
     } else if(addr >= 0x2000 && addr <= 0x3FFF){
-        uint8_t reg = addr & 0x0007;
+        uint16_t reg = 0x2000 + ((addr - 0x2000) & 0x7); // mirror ogni 8 registri ($2000-$2007)
         return ppu_reg_read(bus -> ppu, reg);
     } else if((addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015){
         return apu_stub_read(addr);
@@ -73,7 +73,7 @@ void bus_cpu_write8(bus bus, uint16_t addr, uint8_t value){
     if(addr <= 0x1FFF) {
         bus -> ram[addr & 0x07FF] = value;
     } else if(addr >= 0x2000 && addr <= 0x3FFF){
-        uint8_t reg = addr & 0x0007;
+        uint16_t reg = 0x2000 + ((addr - 0x2000) & 0x7); // mirror ogni 8 registri ($2000-$2007)
         ppu_reg_write(bus -> ppu, reg, value);
     } else if((addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015){
         apu_stub_write(addr, value);

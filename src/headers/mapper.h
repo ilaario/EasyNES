@@ -29,6 +29,12 @@ typedef struct Mapper* mapper;
 mapper mapper_nrom_create(cartridge cart);
 void mapper_destroy(mapper m);
 
+void mapper_nrom_attach(mapper m, cartridge c);
+
+mapper mapper_mmc1_create(cartridge cart);  // ritorna NULL se alloc fallisce
+
+mapper create_mapper_for_cart(cartridge cart);
+
 void DEBUG_change_cart(mapper m, cartridge cart);
 
 #endif //EASYNES_MAPPER_H

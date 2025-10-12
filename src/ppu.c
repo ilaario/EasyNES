@@ -3,6 +3,7 @@
 //
 
 #include "headers/ppu.h"
+#include <string.h>   // memset
 
 const int32_t PPU_CYCLES_PER_SCANLINE = 341;
 const int32_t NTSC_SCANLINES_PER_FRAME = 262;
@@ -29,6 +30,14 @@ void ppu_init(ppu ppu, mapper mapper, enum mirror_type nt_mirror){
     memset(ppu -> ciram, 0, 2 * 1024); // nametable ram
     memset(ppu -> palette, 0, 32);     // $3F00 - $3F1F
     ppu -> read_buffer = 0;;     // buffer for PPUDATA reads
+    // Provide a safe default power-on palette (black/greys) until game programs $3F00-$3F1F
+    static const uint8_t PAL_BOOT[32] = {
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20,
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20,
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20,
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20
+    };
+    memcpy(ppu->palette, PAL_BOOT, 32);
 
     // Timing
     ppu ->  scanline = 0;
@@ -60,6 +69,14 @@ void ppu_reset(ppu ppu){
     memset(ppu -> ciram, 0, 2 * 1024);
     memset(ppu -> palette, 0, 32);
     ppu -> read_buffer = 0;;
+    // Provide a safe default power-on palette (black/greys) until game programs $3F00-$3F1F
+    static const uint8_t PAL_BOOT[32] = {
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20,
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20,
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20,
+        0x0F,0x00,0x10,0x20,  0x0F,0x00,0x10,0x20
+    };
+    memcpy(ppu->palette, PAL_BOOT, 32);
     ppu -> nmi_pending = false;
 
     // Timing
@@ -93,18 +110,40 @@ uint8_t pal_index_fix(uint8_t addr){
 
 uint8_t ppu_read(ppu ppu, uint16_t addr){
     uint16_t a = addr & 0x3FFF;
-    if(a <= 0x1FFF) return ppu -> mapper -> chr_read(ppu -> mapper, a);
-    if(a <= 0x2FFF) return ppu -> ciram[nt_phys_index(ppu, a)];
-    if(a <= 0x3FFF) return ppu -> ciram[nt_phys_index(ppu, a - 0x1000)];
-    return ppu -> palette[pal_index_fix(a)];
+    if (a < 0x2000) {
+        // Pattern tables ($0000-$1FFF) via mapper (CHR-ROM/RAM)
+        return ppu->mapper->chr_read(ppu->mapper, a);
+    } else if (a < 0x3F00) {
+        // Nametables region ($2000-$2FFF) and its mirror ($3000-$3EFF)
+        if (a < 0x3000) {
+            return ppu->ciram[nt_phys_index(ppu, a)];
+        } else {
+            // $3000-$3EFF mirrors $2000-$2EFF
+            return ppu->ciram[nt_phys_index(ppu, (uint16_t)(a - 0x1000))];
+        }
+    } else {
+        // Palette RAM indexes ($3F00-$3FFF) with internal mirroring
+        return ppu->palette[pal_index_fix((uint8_t)a)];
+    }
 }
 
 void ppu_write(ppu ppu, uint16_t addr, uint16_t value){
     uint16_t a = addr & 0x3FFF;
-    if(a <= 0x1FFF) ppu -> mapper -> chr_write(ppu -> mapper, a, value);
-    if(a <= 0x2FFF) ppu -> ciram[nt_phys_index(ppu, a)] = value;
-    if(a <= 0x3FFF) ppu -> ciram[nt_phys_index(ppu, a - 0x1000)] = value;
-    ppu -> palette[pal_index_fix(a)] = value;
+    uint8_t v = (uint8_t)(value & 0xFF);
+    if (a < 0x2000) {
+        // Pattern tables ($0000-$1FFF) via mapper (CHR-ROM/RAM)
+        ppu->mapper->chr_write(ppu->mapper, a, v);
+    } else if (a < 0x3F00) {
+        // Nametables region ($2000-$2FFF) and mirror ($3000-$3EFF)
+        if (a < 0x3000) {
+            ppu->ciram[nt_phys_index(ppu, a)] = v;
+        } else {
+            ppu->ciram[nt_phys_index(ppu, (uint16_t)(a - 0x1000))] = v;
+        }
+    } else {
+        // Palette RAM indexes ($3F00-$3FFF) with mirroring of 0x10/0x14/0x18/0x1C
+        ppu->palette[pal_index_fix((uint8_t)a)] = v;
+    }
 }
 
 void write_2000(ppu ppu, uint8_t value){
@@ -233,7 +272,7 @@ void ppu_reg_write(ppu ppu, uint8_t reg_index, uint8_t value){
             write_2007(ppu, value);
             break;
         default:
-            /* no-op */
+            break;
     }
 }
 
@@ -369,5 +408,90 @@ void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot){
 
     for (int i = 0; i < remain; i++){
         step_one_ppu_cycle(ppu);
+    }
+}
+// --- NTSC NES master palette (RGBA). Common approximation used by many emulators.
+// Indexing uses values stored in PPU palette RAM ($3F00-$3F1F).
+static const uint32_t NES_PAL_RGBA[64] = {
+    0xFF757575,0xFF271B8F,0xFF0000AB,0xFF47009F,0xFF8F0077,0xFFA7004E,0xFFA70015,0xFF7F0B00,
+    0xFF432F00,0xFF004700,0xFF005100,0xFF003F17,0xFF1B3F5F,0xFF000000,0xFF000000,0xFF000000,
+    0xFFBCBCBC,0xFF0073EF,0xFF233BEF,0xFF8300F3,0xFFBF00BF,0xFFE7005B,0xFFDB2B00,0xFFCB4F0F,
+    0xFF8B7300,0xFF009700,0xFF00AB00,0xFF00933B,0xFF00838B,0xFF000000,0xFF000000,0xFF000000,
+    0xFFFFFFFF,0xFF3FBFFF,0xFF5F73FF,0xFFA74BFF,0xFFF04FBF,0xFFFF6F73,0xFFFF7B3F,0xFFEF9B23,
+    0xFFDFBF13,0xFF4FDF4B,0xFF58F898,0xFF00EBDB,0xFF5F73FF,0xFF000000,0xFF000000,0xFF000000,
+    0xFFFFFFFF,0xFFA7E7FF,0xFFBFB3FF,0xFFD7A3FF,0xFFFFA3E7,0xFFFFBFB3,0xFFFFCF9B,0xFFF7DF9B,
+    0xFFFFF3B3,0xFFB3FFCF,0xFF9FFFF3,0xFFA3E7FF,0xFFBFB3FF,0xFF000000,0xFF000000,0xFF000000
+};
+
+// Convert NES color index (0..63) to RGBA.
+static inline uint32_t nes_idx_to_rgba(uint8_t idx) {
+    return NES_PAL_RGBA[idx & 0x3F];
+}
+
+void ppu_get_frame_rgba(ppu ppu, uint32_t *dst_rgba){
+    const int NES_W = 256;
+    const int NES_H = 240;
+
+    // Safety
+    if (!ppu || !dst_rgba) return;
+
+    // Clear to a dark background
+    uint32_t clear = 0xFF101010u;
+    for (int y = 0; y < NES_H; ++y){
+        for (int x = 0; x < NES_W; ++x){
+            dst_rgba[(size_t)y * (size_t)NES_W + (size_t)x] = clear;
+        }
+    }
+    if (!ppu->mapper || !ppu->mapper->chr_read) return;
+
+    // Choose BG pattern table base from PPUCTRL bit4 (0=$0000, 1=$1000)
+    uint16_t chr_base = (ppu->ppuctrl & 0x10) ? 0x1000 : 0x0000;
+
+    // Universal background color at $3F00
+    uint8_t universal = ppu->palette[0x00];
+
+    // Render nametable 0 ($2000) only, 32x30 tiles
+    for (int y = 0; y < NES_H; ++y){
+        int tileY  = y >> 3;          // 0..29
+        int fineY  = y & 7;           // 0..7
+        for (int x = 0; x < NES_W; ++x){
+            int tileX = x >> 3;       // 0..31
+            int fineX = x & 7;        // 0..7
+
+            // Name table byte: tile index
+            uint16_t ntAddr = (uint16_t)(0x2000 + tileY * 32 + tileX);
+            uint8_t  tile   = ppu->ciram[nt_phys_index(ppu, ntAddr)];
+
+            // Attribute table: 1 byte covers a 4x4 tiles area; choose 2-bit palette
+            uint16_t atAddr = (uint16_t)(0x23C0 + (tileY >> 2) * 8 + (tileX >> 2));
+            uint8_t  atByte = ppu->ciram[nt_phys_index(ppu, atAddr)];
+            int quadX = (tileX & 2) ? 1 : 0;
+            int quadY = (tileY & 2) ? 1 : 0;
+            int shift = (quadY << 2) | (quadX << 1);   // (0,0)->0, (1,0)->2, (0,1)->4, (1,1)->6
+            uint8_t palIndex2b = (uint8_t)((atByte >> shift) & 0x03); // 0..3
+
+            // Fetch the two bitplanes for this scanline of the tile
+            uint16_t tileAddr = (uint16_t)(chr_base + tile * 16 + fineY);
+            uint8_t p0 = ppu->mapper->chr_read(ppu->mapper, tileAddr);
+            uint8_t p1 = ppu->mapper->chr_read(ppu->mapper, (uint16_t)(tileAddr + 8));
+
+            int bit = 7 - fineX;
+            int lo = (p0 >> bit) & 1;
+            int hi = (p1 >> bit) & 1;
+            int pix = (hi << 1) | lo;               // 0..3
+
+            // Background palettes: four sets of 4 entries starting at $3F00.
+            // For color 0, use universal background color ($3F00).
+            uint8_t nes_color;
+            if (pix == 0){
+                nes_color = universal;
+            } else {
+                // $3F01..$3F03 (pal0), $3F05..$3F07 (pal1), ...
+                uint8_t palBase = (uint8_t)(0x00 + palIndex2b * 4);
+                nes_color = ppu->palette[palBase + pix];
+            }
+
+            dst_rgba[(size_t)y * (size_t)NES_W + (size_t)x] = nes_idx_to_rgba(nes_color);
+        }
     }
 }

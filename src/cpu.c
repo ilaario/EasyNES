@@ -38,8 +38,9 @@ static inline uint16_t pull16(cpu c){
 }
 
 static inline void push16(cpu c, uint16_t v){
-    push8(c, (uint8_t)(v & 0xFF));
+    // 6502 stack order for 16-bit values: push high byte, then low byte
     push8(c, (uint8_t)(v >> 8));
+    push8(c, (uint8_t)(v & 0xFF));
 }
 
 // ========================
@@ -114,18 +115,18 @@ static inline uint16_t addr_ind_y(cpu c, bool* crossed){
 static inline uint16_t jmp_ind(cpu c){
     uint16_t prt = fetch_imm16(c);
     uint8_t lo = cpu_read8(c, prt);
-    uint16_t hi_addr = (uint16_t)((prt & 0xFF00) | (prt + 1) & 0x00FF);
+    uint16_t hi_addr = (uint16_t)((prt & 0xFF00) | ((prt + 1) & 0x00FF));
     uint8_t hi = cpu_read8(c, hi_addr);
     return (uint16_t)((uint16_t)hi << 8) | (uint16_t)lo;
 }
 
 
-inline void set_flag(cpu c, uint8_t mask, bool on){
+static inline void set_flag(cpu c, uint8_t mask, bool on){
     if(on) c -> P |= mask;
     else   c -> P &= ~mask;
 }
 
-inline void set_ZN(cpu c, uint8_t v){
+static inline void set_ZN(cpu c, uint8_t v){
     set_flag(c, FLAG_Z, (v == 0));
     set_flag(c, FLAG_N, ((v & 0x80) != 0));
 }
@@ -701,15 +702,16 @@ int op_RTS(cpu c) {
 // =====================
 
 int branch(cpu c, bool take) {
-    int cycles = 2;
-    int8_t off = (int8_t)fetch_imm8(c);
+    int8_t off = (int8_t)fetch_imm8(c);   // fetch signed offset; PC now points to next instruction (base)
+    uint16_t base = c->PC;                // base = address after the branch instruction
     if (take) {
-        uint16_t old = c->PC;
-        c->PC = (uint16_t)(c->PC + off);
-        cycles += 1;
-        if (page_crossed(old, c->PC)) cycles += 1;
+        uint16_t dst = (uint16_t)(base + off);
+        int cycles = 3;                   // 2 + 1 for taken
+        if (page_crossed(base, dst)) cycles += 1;
+        c->PC = dst;
+        return cycles;
     }
-    return cycles;
+    return 2;                             // not taken: just 2 cycles, PC already at base
 }
 
 int op_BEQ(cpu c) { return branch(c, (c->P & FLAG_Z) != 0); }
@@ -1456,6 +1458,23 @@ int execute_and_return_cycles(cpu c, uint8_t opcode){
         case 0xB8: return op_CLV(c);         // CLV
         case 0xD8: return op_CLD(c);         // CLD
         case 0xF8: return op_SED(c);         // SED
+
+        // =====================
+        // Transfer & Stack
+        // =====================
+        // ===== Transfers =====
+        case 0xAA: return op_TAX(c);        // TAX
+        case 0xA8: return op_TAY(c);        // TAY
+        case 0x8A: return op_TXA(c);        // TXA
+        case 0x98: return op_TYA(c);        // TYA
+        case 0xBA: return op_TSX(c);        // TSX
+        case 0x9A: return op_TXS(c);        // TXS
+
+        // ===== Index inc/dec =====
+        case 0xE8: return op_INX(c);        // INX
+        case 0xCA: return op_DEX(c);        // DEX
+        case 0xC8: return op_INY(c);        // INY
+        case 0x88: return op_DEY(c);        // DEY
 
             // ===== BRK / RTI / NOP =====
         case 0x00: return op_BRK(c);         // BRK

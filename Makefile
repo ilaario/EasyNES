@@ -1,36 +1,60 @@
 CC = gcc
-CFLAGS = -Wvla -Wextra -Werror -D_GNU_SOURCE -std=c99 -I./headers
-EXECU = director user erogatore_ticket
+CFLAGS = -Wvla -Wextra -Werror -D_GNU_SOURCE -std=c11 -I./headers
+
 SRC_DIR = src
 BUILD_DIR = build
 GFLAGS_DEBUG = $(CFLAGS) -g -O0 -Wall -D DEBUGLOG
 DEBUG = gdb
-LIB = -L$(BUILD_DIR) -llogger
+LIB = -L$(BUILD_DIR) -llogger -lSDL2
 AR = ar
 
-all: compile clear
+# Detect Homebrew (Apple Silicon)
+BREW_PREFIX  ?= $(shell brew --prefix 2>/dev/null)
+RAYLIB_PREFIX:= $(shell brew --prefix raylib 2>/dev/null)
 
-run: compile_lib compile
-	# clear
-	$(BUILD_DIR)/easynes test/Zelda_II_The_Adventure_of_Link.nes
+CFLAGS  := -D_GNU_SOURCE -std=c11 -I./headers
+# Prova a usare pkg-config; se non c'è, fallback a include diretto
+RAYLIB_CFLAGS := $(shell pkg-config --cflags raylib 2>/dev/null)
+ifeq ($(strip $(RAYLIB_CFLAGS)),)
+  RAYLIB_CFLAGS := -I$(RAYLIB_PREFIX)/include
+endif
 
-compile_lib:
-	mkdir -p $(BUILD_DIR)
-	$(CC) -c $(SRC_DIR)/logger.c -o $(BUILD_DIR)/logger.o
-	$(AR) rcs $(BUILD_DIR)/liblogger.a $(BUILD_DIR)/logger.o
-	rm -rf $(BUILD_DIR)/logger.o
+# Librerie raylib + frameworks macOS
+RAYLIB_LIBS := $(shell pkg-config --libs raylib 2>/dev/null)
+ifeq ($(strip $(RAYLIB_LIBS)),)
+  RAYLIB_LIBS := -L$(RAYLIB_PREFIX)/lib -lraylib -framework Cocoa -framework IOKit -framework CoreVideo -framework OpenGL
+endif
 
-compile:
-	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(BUILD_DIR)/easynes $(SRC_DIR)/cartridge.c $(SRC_DIR)/controller.c $(SRC_DIR)/mapper_nrom.c $(SRC_DIR)/ppu.c $(SRC_DIR)/bus.c $(SRC_DIR)/cpu.c $(SRC_DIR)/emu.c $(SRC_DIR)/main.c   $(LIB)
+LIBS := -Lbuild -llogger $(RAYLIB_LIBS)
 
-compile_debug:
-	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(GFLAGS_DEBUG) -o $(BUILD_DIR)/easynes $(SRC_DIR)/main.c $(LIB)
+SRC := src/cartridge.c src/mapper_nrom.c src/mapper_mmc1.c src/mapper_factory.c src/controller.c src/ppu.c src/bus.c src/cpu.c src/emu.c src/test.c src/main.c
+BIN := build/easynes
 
+CFLAGS+= -fsanitize=address -fno-omit-frame-pointer
+LDFLAGS+= -fsanitize=address
 
-run_valgrind: compile_lib compile
-	valgrind -s --leak-check=full --show-leak-kinds=all --track-origins=yes --trace-children=yes --log-file=valgrind-out.txt $(BUILD_DIR)/easynes
+.PHONY: all run clear
+
+all: $(BIN)
+
+$(BIN): build/liblogger.a $(SRC)
+	@mkdir -p build
+	gcc $(CFLAGS) $(RAYLIB_CFLAGS) -o $(BIN) $(SRC) $(LIBS)
+
+build/liblogger.a: src/logger.c
+	@mkdir -p build
+	gcc -c src/logger.c -o build/logger.o
+	ar rcs build/liblogger.a build/logger.o
+	rm -f build/logger.o
+
+run_z1: $(BIN)
+	$(BIN) test/The_Legend_of_Zelda.nes
+
+run_z2: $(BIN)
+	$(BIN) test/Zelda_II_The_Adventure_of_Link.nes
+
+run_ac: $(BIN)
+	$(BIN) test/AccuracyCoin.nes
 
 clear:
-	rm -rf $(BUILD_DIR)
+	rm -rf build
