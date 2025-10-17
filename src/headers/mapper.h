@@ -7,10 +7,22 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stddef.h>
 
 #include "cartridge.h"
 
-struct Cartridge;
+typedef enum Type {
+    NROM        = 0,
+    SxROM       = 1,
+    UxROM       = 2,
+    CNROM       = 3,
+    MMC3        = 4,
+    AxROM       = 7,
+    ColorDreams = 11,
+    GxROM       = 66,
+} mapper_type;
 
 // vtable semplice per mapper
 struct Mapper {
@@ -20,21 +32,30 @@ struct Mapper {
     void    (*chr_write)(struct Mapper*, uint16_t addr, uint8_t v);
     void    (*reset)(struct Mapper*);
 
+    enum mirror_type (*get_mirror_type)();
+
+    void    (*scanlineIRQ)();
+
     cartridge cart;
+    mapper_type m_type;
 };
 
 typedef struct Mapper* mapper;
 
-// factory per NROM (mapper 0)
-mapper mapper_nrom_create(cartridge cart);
-void mapper_destroy(mapper m);
+#include "mapper_nrom.h"
+#include "irq.h"
 
-void mapper_nrom_attach(mapper m, cartridge c);
+void create_mapper(mapper m, cartridge cart,
+                   mapper_type t, irq_handle irq,
+                   void (*mirroring_cb)(void));
+
 
 mapper mapper_mmc1_create(cartridge cart);  // ritorna NULL se alloc fallisce
 
 mapper create_mapper_for_cart(cartridge cart);
 
-void DEBUG_change_cart(mapper m, cartridge cart);
+static void mmc1_remap_prg(mapper m);
+static void mmc1_remap_chr(mapper m);
+static void mmc1_write_control(mapper m, uint8_t v);
 
 #endif //EASYNES_MAPPER_H
