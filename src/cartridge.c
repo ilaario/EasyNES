@@ -212,6 +212,7 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
 
     if(pCartridge -> header.chr_rom_size_bytes == 0){
         pCartridge -> chr_rom = NULL;
+        pCartridge -> has_chr_ram = true;
         printf("No need to allocate CHR-ROM\nAllocating CHR-RAM instead...");
         pCartridge -> chr_ram = (uint8_t*)malloc(KIB(8));
         if(pCartridge -> chr_ram == NULL){
@@ -221,6 +222,7 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
         printf("Allocated %dKiB for CHR-RAM\n", 8);
     } else {
         pCartridge -> chr_ram = NULL;
+        pCartridge -> has_chr_ram = false;
         printf("Allocating CHR-ROM...\n");
         pCartridge -> chr_rom = (uint8_t*)malloc(KIB(pCartridge -> header.chr_rom_size_bytes));
         if(pCartridge -> chr_rom == NULL){
@@ -400,4 +402,17 @@ cartridge make_dummy(uint8_t prg_kib, uint8_t chr_kib, bool has_prg_ram, bool ch
     }
 
     return cart;
+}
+
+uint8_t* getROM(cartridge c){
+    return c -> prg_rom;
+}
+
+uint8_t* getVROM(cartridge c){
+    if(c -> has_chr_ram) return c -> chr_ram;
+    else return c -> chr_rom;
+}
+
+uint16_t getMapper(cartridge c){
+    return c -> header.mapper_id;
 }

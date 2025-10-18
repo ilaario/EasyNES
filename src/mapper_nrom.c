@@ -42,6 +42,12 @@ mapper mapper_nrom_create(cartridge cart){
         n -> character_ram = (uint8_t*) calloc(0x2000, sizeof(uint8_t));
     } else n -> uses_character_ram = false;
 
+    n -> base.chr_read = chr_read;
+    n -> base.chr_write = chr_write;
+    n -> base.cpu_read = cpu_read;
+    n -> base.cpu_write = cpu_write;
+
+
     return (mapper)n;
 }
 

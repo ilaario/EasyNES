@@ -58,4 +58,7 @@ static void mmc1_remap_prg(mapper m);
 static void mmc1_remap_chr(mapper m);
 static void mmc1_write_control(mapper m, uint8_t v);
 
+bool inline hasExtendedRAM(mapper m) { return true; }
+
+
 #endif //EASYNES_MAPPER_H

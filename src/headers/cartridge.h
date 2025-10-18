@@ -96,7 +96,9 @@ enum nes_rom_format {
 enum mirror_type {
     MIRROR_VERTICAL,
     MIRROR_HORIZONTAL,
-    MIRROR_FOUR_SCREEN
+    ONE_LOWER_SCREEN,
+    ONE_SCREEN_HIGHER,
+    FOUR_SCREEN
 };
 
 enum vs_playchoice {
@@ -165,6 +167,8 @@ struct Cartridge {
     uint8_t* prg_ram;    // size = meta.prg_ram_size (anche 0 → NULL)
     uint8_t* chr_ram;    // size = meta.chr_ram_size se uses_chr_ram, else NULL
 
+    bool has_chr_ram;
+
     // Stato mapper (per NROM è nullo; per altri mapper serviranno registri)
     void* mapper_state;   // oppure una union/struct specifica per mapper 0/1/4…
 };
@@ -199,5 +203,11 @@ void print_info(cartridge pCartridge);
  * @return A pointer to the dummy cartridge
  */
 cartridge make_dummy(uint8_t prg_kib, uint8_t chr_kib, bool has_prg_ram, bool chr_is_ram);
+
+uint8_t* getROM(cartridge c);
+
+uint8_t* getVROM(cartridge c);
+
+uint16_t getMapper(cartridge c);
 
 #endif //EASYNES_CARTRIDGE_H
