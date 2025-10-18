@@ -7,67 +7,114 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <raylib.h>
 
 #include "mapper.h"
+#include "pbus.h"
+
+typedef struct {
+    int width;
+    int height;
+    Color *pixels;     // length = width * height
+    Texture2D tex;     // opzionale: texture GPU per disegnare veloce
+} PictureBuffer;
+
+typedef PictureBuffer* p_buffer;
+
+typedef struct {
+    uint8_t *data;     // array dinamico di byte
+    size_t size;       // quanti elementi sono usati (come .size())
+    size_t capacity;   // capacità allocata (come .capacity())
+} ByteVector;
+
+typedef ByteVector* bv;
+
+#define PB_INDEX(pb, x, y) ((y)*(pb)->width + (x))
+
+
+#define SCANLINE_CYCLE_LENGTH   341
+#define SCANLINE_END_CYCLE      340
+#define VISIBLE_SCANLINE        240
+#define SCANLINE_VISIBLE_DOTS   256
+#define FRAME_END_SCANLINE      261
+
+typedef enum ppu_state{
+    PRE_RENDER      = 0,
+    RENDER          = 1,
+    POST_RENDER     = 2,
+    VERTICAL_BLANK  = 3
+} ppu_state;
+
+typedef enum character_page{
+    LOW = 0,
+    HIGH = 1
+} character_page;
 
 struct Mapper;
 
 struct PPU {
-    uint16_t v, t;            // current/temporary VRAM address
-    uint8_t  x;               // fine X (3 bit)
-    uint8_t  w;               // write toggle (0/1)
+    void (*vblank_callback)(void);
+    pbus bus;
+    bv sprite_memory;
+    bv scanline_sprites;
 
-    // PPU registers
-    uint8_t ppuctrl;          // $2000
-    uint8_t ppumask;          // $2001
-    uint8_t ppustatus;        // $2002 -> use only bit 7/6/5
+    ppu_state pipeline_state;
 
-    // OAM
-    uint8_t oam[256];
-    uint8_t oamaddr;
+    int cycle;
+    int scanline;
+    bool even_frame;
 
-    // PPU memory
-    uint8_t ciram[2 * 1024];  // nametable ram
-    uint8_t palette[32];      // $3F00 - $3F1F
-    uint8_t read_buffer;      // buffer for PPUDATA reads
-
-    // Timing
-    int32_t scanline;         // 0 .. 261
-    int32_t dot;              // 0 .. 340
-    uint64_t ppu_cycle_accum;
-
-    // Flags sprite
-    bool sprite0_hit;
+    bool vblank;
+    bool sprite_zero_hit;
     bool sprite_overflow;
 
-    mapper mapper;            // per accedere a CHR via mapper
-    enum mirror_type nt_mirror;
-    bool nmi_pending;
+    uint16_t data_address, temp_address;        // current/temporary VRAM address
+    uint8_t fine_x_scroll;                      // fine X (3 bit)
+    uint8_t first_write;                        // write toggle (0/1)
+    uint8_t data_buffer;
+
+    uint8_t sprite_data_address;
+
+    bool long_sprite;
+    bool generate_interrupt;
+
+    bool grayscale_mode;
+    bool show_sprites;
+    bool show_background;
+    bool hide_edge_sprites;
+    bool hide_edge_backgound;
+
+    character_page bg_page;
+    character_page spr_page;
+
+    uint16_t data_address_increment;
+
+    p_buffer picture_buffer;
 };
 
 typedef struct PPU* ppu;
 
-void     ppu_init(ppu ppu, mapper mapper, enum mirror_type nt_mirror);
-void     ppu_reset(ppu ppu);
+void create_ppu(ppu pp, pbus pb);
+void step(ppu pp);
+void reset(ppu pp);
 
-// accesso ai registri memory-mapped $2000–$2007
-uint8_t  ppu_reg_read (ppu ppu, uint8_t reg_index);
-void     ppu_reg_write(ppu ppu, uint8_t reg_index, uint8_t value);
+void setInterruptCallback(ppu pp, void(*cb)(void));
 
-// chiamata dal bus quando scrivi $4014
-void     ppu_oam_dma_push_byte(ppu ppu, uint8_t value);
+void doDMA(ppu pp, const uint8_t* page_ptr);
 
-bool     ppu_nmi_pending(ppu ppu);
-void     ppu_clear_nmi(ppu ppu);
-
-void ppu_tick(ppu ppu, uint64_t cpu_cycles);
-void step_one_ppu_cycle(ppu ppu);
-
-void ppu_write(ppu ppu, uint16_t addr, uint16_t value);
-uint8_t ppu_read(ppu ppu, uint16_t addr);
-
-// Riempi un buffer RGBA8888 256x240 con il frame corrente
-void ppu_get_frame_rgba(ppu ppu, uint32_t *dst_rgba);
+// Callbacks mapped to CPU address space
+// Addresses written to by the program
+void control(ppu pp, uint8_t ctrl);
+void setMask(ppu pp, uint8_t mask);
+void setOAMAddress(ppu pp, uint8_t addr);
+void setDataAddress(ppu pp, uint8_t addr);
+void setScroll(ppu pp, uint8_t scroll);
+void setData(ppu pp, uint8_t data);
+// Read by the program
+uint8_t getStatus(ppu pp);
+uint8_t getData(ppu pp);
+uint8_t getOAMData(ppu pp);
+void setOAMData(ppu pp, uint8_t value);
 
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot);
 
