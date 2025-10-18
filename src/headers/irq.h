@@ -6,8 +6,8 @@
 #define EASYNES_IRQ_H
 
 struct irq_h{
-    void (*pull)(void);
-    void (*release)(void);
+    void (*pull)(struct irq_h* irq);
+    void (*release)(struct irq_h* irq);
 };
 
 typedef struct irq_h* irq_handle;
