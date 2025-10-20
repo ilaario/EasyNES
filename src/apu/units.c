@@ -83,7 +83,7 @@ void v_quarter_frame_clock(volume f){
         return;
     }
 
-    if (!clock(f -> divider)) return;
+    if (!div_clock(f -> divider)) return;
 
     if (f -> decayVolume > 0) --f -> decayVolume;
     else if (f -> is_looping) f -> decayVolume = max_volume;

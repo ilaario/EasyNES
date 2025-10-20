@@ -90,7 +90,7 @@ static inline float apu_mix(uint8_t pulse1, uint8_t pulse2, uint8_t triangle, ui
 }
 
 /* -------------------- Step CPU → APU -------------------- */
-void step(apu a)
+void apu_step(apu a)
 {
     n_clock(a -> noise);
     dmc_clock(a -> dmc);
@@ -119,7 +119,7 @@ void write_register(apu a, uint16_t addr, uint8_t value)
             a->pulse1 -> volume -> fixedVolumeOrPeriod = value & 0x0F;
             a->pulse1 -> volume -> constant_volume     = (value & (1u<<4)) != 0;
             a->pulse1 -> volume -> is_looping = a->pulse1->length_counter->halt = (value & (1u<<5)) != 0;
-            a->pulse1->seq_type         = (enum Type)(value >> 6);
+            a->pulse1->seq_type         = (enum Pulse_U_Type)(value >> 6);
             break;
 
         case APU_SQ1_SWEEP:
@@ -147,7 +147,7 @@ void write_register(apu a, uint16_t addr, uint8_t value)
             a->pulse2 -> volume -> fixedVolumeOrPeriod = value & 0x0F;
             a->pulse2 -> volume -> constant_volume     = (value & (1u<<4)) != 0;
             a->pulse2 -> volume -> is_looping = a->pulse2 -> length_counter -> halt = (value & (1u<<5)) != 0;
-            a->pulse2 -> seq_type         = (enum Type)(value >> 6);
+            a->pulse2 -> seq_type         = (enum Pulse_U_Type)(value >> 6);
             break;
 
         case APU_SQ2_SWEEP:
@@ -202,7 +202,7 @@ void write_register(apu a, uint16_t addr, uint8_t value)
 
         case APU_NOISE_HI:
             set_from_table(a->noise -> length, (size_t)(value >> 3));
-            reset(a->noise -> volume -> divider);
+            div_reset(a->noise -> volume -> divider);
             break;
 
         case APU_DMC_FREQ:
@@ -228,7 +228,7 @@ void write_register(apu a, uint16_t addr, uint8_t value)
             set_enable(a->pulse2 -> length_counter,   (value & 0x02) != 0);
             set_enable(a->triangle -> length, (value & 0x04) != 0);
             set_enable(a->noise -> length,    (value & 0x08) != 0);
-            control(a->dmc, (value & 0x10) != 0);
+            div_control(a->dmc, (value & 0x10) != 0);
             break;
 
         case APU_FRAME_CONTROL:

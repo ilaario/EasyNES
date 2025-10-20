@@ -16,15 +16,15 @@ enum Pulse_Type {
 } type;
 
 struct Pulse{
-    volume          volume;
-    length_counter  length_counter;
+    volume            volume;
+    length_counter    length_counter;
 
-    size_t          seq_idx;
-    enum Type       seq_type;
-    divider         sequencer;
-    int             period;
-    enum Pulse_Type type;
-    sweep           sweep;
+    size_t            seq_idx;
+    enum Pulse_U_Type seq_type;
+    divider           sequencer;
+    int               period;
+    enum Pulse_Type   type;
+    sweep             sweep;
 };
 
 typedef struct Pulse* pulse;

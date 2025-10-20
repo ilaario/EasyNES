@@ -40,10 +40,17 @@ void set_rate(dmc d, int idx){
                                 190, 160, 142, 128, 106, 84, 72, 54 };
 
     set_period(d -> change_rate, rate[idx]);
-    reset(d -> change_rate);
+    div_reset(d -> change_rate);
 }
 
-void control(dmc d, bool enable);
+void div_control(dmc d, bool enable){
+    d -> change_enabled = enable;
+    if (!enable) d -> remaining_bytes = 0;
+    else if (d -> remaining_bytes == 0) {
+        d -> current_address = d -> sample_begin;
+        d -> remaining_bytes = d -> sample_length;
+    }
+}
 
 void clear_interrupt(dmc d){
     d -> irq -> release(d -> irq);
@@ -69,7 +76,7 @@ bool load_sample(dmc d){
 
     d -> sample_buffer = d -> dma(d -> current_address);
 
-    if(d -> current_address == 0xFFFF) d -> current_address == 0x8000;
+    if(d -> current_address == 0xFFFF) d -> current_address = 0x8000;
     else d -> current_address += 1;
     return true;
 }
@@ -94,7 +101,7 @@ int pop_delta(dmc d){
 
 void dmc_clock(dmc d){
     if(!d -> change_enabled) return;
-    if(!clock(d -> change_rate)) return;
+    if(!div_clock(d -> change_rate)) return;
     int delta = pop_delta(d);
     if(d -> silenced) return;
 

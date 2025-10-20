@@ -34,7 +34,7 @@ typedef struct DMC* dmc;
 void    dmc_init(dmc d, irq_handle h, uint8_t (*dma)(uint16_t));
 void    set_irq_enable(dmc d, bool enable);
 void    set_rate(dmc d, int idx);
-void    control(dmc d, bool enable);
+void    div_control(dmc d, bool enable);
 void    clear_interrupt(dmc d);
 
 void    dmc_clock(dmc d);

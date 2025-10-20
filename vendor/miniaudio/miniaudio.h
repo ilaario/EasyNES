@@ -1859,8 +1859,8 @@ typedef enum
     ma_data_converter_execution_path_format_only,       /* Only format conversion. */
     ma_data_converter_execution_path_channels_only,     /* Only channel conversion. */
     ma_data_converter_execution_path_resample_only,     /* Only resampling. */
-    ma_data_converter_execution_path_resample_first,    /* All conversions, but resample as the first step. */
-    ma_data_converter_execution_path_channels_first     /* All conversions, but channels as the first step. */
+    ma_data_converter_execution_path_resample_first,    /* All conversions, but resample as the first apu_step. */
+    ma_data_converter_execution_path_channels_first     /* All conversions, but channels as the first apu_step. */
 } ma_data_converter_execution_path;
 
 typedef struct
@@ -2461,22 +2461,22 @@ MA_API void ma_mutex_unlock(ma_mutex* pMutex);
 
 
 /*
-Initializes an auto-reset event.
+Initializes an auto-div_reset event.
 */
 MA_API ma_result ma_event_init(ma_event* pEvent);
 
 /*
-Uninitializes an auto-reset event.
+Uninitializes an auto-div_reset event.
 */
 MA_API void ma_event_uninit(ma_event* pEvent);
 
 /*
-Waits for the specified auto-reset event to become signalled.
+Waits for the specified auto-div_reset event to become signalled.
 */
 MA_API ma_result ma_event_wait(ma_event* pEvent);
 
 /*
-Signals the specified auto-reset event.
+Signals the specified auto-div_reset event.
 */
 MA_API ma_result ma_event_signal(ma_event* pEvent);
 #endif  /* MA_NO_THREADING */
@@ -3461,7 +3461,7 @@ The general flow goes like this:
   1) A context is created with `onContextInit()`
      1a) Available devices can be enumerated with `onContextEnumerateDevices()` if required.
      1b) Detailed information about a device can be queried with `onContextGetDeviceInfo()` if required.
-  2) A device is created from the context that was created in the first step using `onDeviceInit()`, and optionally a device ID that was
+  2) A device is created from the context that was created in the first apu_step using `onDeviceInit()`, and optionally a device ID that was
      selected from device enumeration via `onContextEnumerateDevices()`.
   3) A device is started or stopped with `onDeviceStart()` / `onDeviceStop()`
   4) Data is delivered to and from the device by the backend. This is always done based on the native format returned by the prior call
@@ -4096,7 +4096,7 @@ struct ma_device
             /*IMMDeviceEnumerator**/ ma_ptr pDeviceEnumerator;      /* Used for IMMNotificationClient notifications. Required for detecting default device changes. */
             ma_IMMNotificationClient notificationClient;
             /*HANDLE*/ ma_handle hEventPlayback;                    /* Auto reset. Initialized to signaled. */
-            /*HANDLE*/ ma_handle hEventCapture;                     /* Auto reset. Initialized to unsignaled. */
+            /*HANDLE*/ ma_handle hEventCapture;                     /* Auto div_reset. Initialized to unsignaled. */
             ma_uint32 actualBufferSizeInFramesPlayback;             /* Value from GetBufferSize(). internalPeriodSizeInFrames is not set to the _actual_ buffer size when low-latency shared mode is being used due to the way the IAudioClient3 API works. */
             ma_uint32 actualBufferSizeInFramesCapture;
             ma_uint32 originalPeriodSizeInFrames;

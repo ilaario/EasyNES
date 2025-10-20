@@ -119,6 +119,8 @@ bool setMapper(bus b, mapper mapper){
     if(hasExtendedRAM(b -> mapper)){
         b -> extRAM = (uint8_t*)calloc(0x2000, sizeof(uint8_t));
     }
+
+    return true;
 }
 
 const uint8_t* getPagePtr(bus b, uint8_t page){

@@ -31,7 +31,7 @@ void set_period_from_table(noise n, int idx){
 }
 
 void n_clock(noise n){
-    if(!clock(n -> divider)) return;
+    if(!div_clock(n -> divider)) return;
 
     bool feedback_input1 = (n -> shift_reg & 0x2) ? mode == Bit1 : (n -> shift_reg & 0x40);
     bool feedback_input2 = (n -> shift_reg & 0x1);

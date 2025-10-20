@@ -17,7 +17,7 @@ void cpu_write(mapper m, uint16_t addr, uint8_t v){
 uint8_t chr_read(mapper m, uint16_t addr) {
     nrom n = (nrom)m;
     if(n -> uses_character_ram) return n -> character_ram[addr];
-    else n -> base.cart -> chr_rom[addr];
+    else return n -> base.cart -> chr_rom[addr];
 }
 
 void chr_write(mapper m, uint16_t addr, uint8_t v){

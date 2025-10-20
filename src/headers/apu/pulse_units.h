@@ -10,7 +10,7 @@
 
 struct Pulse;
 
-enum Type
+enum Pulse_U_Type
 {
     SEQ_12_5   = 0,
     SEQ_25     = 1,
@@ -21,7 +21,7 @@ enum Type
 const int count_pd  = 4;
 const int length_pd = 8;
 
-static inline bool active(enum Type cycle, int idx)
+static inline bool active(enum Pulse_U_Type cycle, int idx)
 {
     const bool _sequences[32] = {
             0, 0, 0, 0, 0, 0, 0, 1, // 12.5%

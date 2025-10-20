@@ -32,7 +32,7 @@ struct APU{
 typedef struct APU* apu;
 
 void    apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(uint16_t));
-void    step(apu a);
+void    apu_step(apu a);
 void    write_register(apu a, uint16_t addr, uint8_t value);
 uint8_t read_status(apu a);
 

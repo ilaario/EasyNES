@@ -57,7 +57,7 @@ void p_set_period(pulse p, int pi){
 }
 
 void p_clock(pulse p){
-    if(clock(p -> sequencer)) p -> seq_idx = (8 + (p -> seq_idx - 1) % 8);
+    if(div_clock(p -> sequencer)) p -> seq_idx = (8 + (p -> seq_idx - 1) % 8);
 }
 
 uint8_t p_sample(pulse p){
@@ -76,7 +76,7 @@ void s_half_frame_clock(sweep s){
     }
 
     if(!s -> enabled) return;
-    if(!clock(s -> div)) return;
+    if(!div_clock(s -> div)) return;
 
     if(s -> shift > 0){
         int current = s -> pulse -> period;

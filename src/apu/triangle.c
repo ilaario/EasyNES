@@ -30,7 +30,7 @@ void t_set_period(triangle t, int p){
 void t_clock(triangle t){
     if(muted(t -> length)) return;
     if(t -> linear -> counter == 0) return;
-    if(clock(t -> sequencer)) t -> seq_idx = (t -> seq_idx + 1) % 32;
+    if(div_clock(t -> sequencer)) t -> seq_idx = (t -> seq_idx + 1) % 32;
 }
 
 uint8_t t_sample(triangle t){

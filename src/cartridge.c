@@ -33,7 +33,9 @@ const char* get_mirroring(enum mirror_type mirror)
     {
         case 0: return "MIRROR_VERTICAL";
         case 1: return "MIRROR_HORIZONTAL";
-        case 2: return "MIRROR_FOUR_SCREEN";
+        case 2: return "ONE_LOWER_SCREEN";
+        case 3:return "ONE_SCREEN_HIGHER";
+        case 4: return "MIRROR_FOUR_SCREEN";
     }
 }
 

@@ -224,7 +224,14 @@ void step(ppu pp){
                 else if (!bg_opaque && !spr_opaque)
                     palette_addr = 0;
 
-                PBSet(pp -> picture_buffer, x, y, colors[read_palette(pp -> bus, palette_addr)]);
+                uint32_t col = colors[read_palette(pp->bus, palette_addr)];
+                Color c = {
+                        (unsigned char)((col >> 16) & 0xFF),  // R
+                        (unsigned char)((col >> 8)  & 0xFF),  // G
+                        (unsigned char)(col & 0xFF),          // B
+                        255                                   // A = fully opaque
+                };
+                PBSet(pp->picture_buffer, x, y, c);
             }else if(pp -> cycle == SCANLINE_VISIBLE_DOTS + 1 && pp -> show_background){
                 if((pp -> data_address & 0x7000) != 0x7000) pp -> data_address += 0x1000;
                 else{
@@ -275,7 +282,7 @@ void step(ppu pp){
 
                 size_t size = (size_t)pp -> picture_buffer -> width * (size_t)pp -> picture_buffer -> height;
                 for(size_t x = 0; x < size; ++x){
-                    for(size_t y = 0; y < pp -> picture_buffer -> width, ++y){
+                    for(size_t y = 0; y < pp -> picture_buffer -> width; ++y){
                         // TODO -> implement screen
                     }
                 }
@@ -326,7 +333,7 @@ uint8_t readOAM(ppu pp, uint16_t addr){
 }
 
 void writeOAM(ppu pp, uint16_t addr, uint8_t v){
-    pp -> sprite_memory -> data[addr];
+    pp -> sprite_memory -> data[addr] = v;
 }
 
 void doDMA(ppu pp, const uint8_t* page_ptr){

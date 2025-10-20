@@ -7,6 +7,15 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#ifdef LOG_DEBUG
+#  undef LOG_DEBUG
+#endif
+#ifdef LOG_INFO
+#  undef LOG_INFO
+#endif
+#ifdef LOG_WARNING
+#  undef LOG_WARNING
+#endif
 #include <raylib.h>
 
 #include "mapper.h"
@@ -117,5 +126,12 @@ uint8_t getOAMData(ppu pp);
 void setOAMData(ppu pp, uint8_t value);
 
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot);
+
+static inline void PBSet(PictureBuffer *pb, int x, int y, Color c);
+static inline Color PBGet(const PictureBuffer *pb, int x, int y);
+bool PBInit(PictureBuffer *pb, int width, int height, Color fill);
+void PBFree(PictureBuffer *pb);
+void PBClear(PictureBuffer *pb, Color fill);
+void PBFlushToGPU(PictureBuffer *pb);
 
 #endif //EASYNES_PPU_H

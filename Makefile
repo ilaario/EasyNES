@@ -27,7 +27,7 @@ endif
 
 LIBS := -Lbuild -llogger $(RAYLIB_LIBS)
 
-SRC := src/cartridge.c src/mapper_nrom.c src/mapper_mmc1.c src/mapper_factory.c src/controller.c src/ppu.c src/bus.c src/cpu.c src/emu.c src/test.c src/main.c
+SRC := src/cartridge.c src/apu/*.c src/mapper_nrom.c src/mapper_mmc1.c src/controller.c src/ppu.c src/bus.c src/cpu.c src/emu.c src/main.c
 BIN := build/easynes
 
 CFLAGS+= -fsanitize=address -fno-omit-frame-pointer
@@ -52,6 +52,9 @@ run_z1: $(BIN)
 
 run_z2: $(BIN)
 	$(BIN) test/Zelda_II_The_Adventure_of_Link.nes
+
+run_m: $(BIN)
+	$(BIN) test/Super_Mario_Bros.nes
 
 run_ac: $(BIN)
 	$(BIN) test/AccuracyCoin.nes

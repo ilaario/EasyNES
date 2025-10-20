@@ -21,7 +21,7 @@ void divider_init(divider d, int period){
     d -> counter = 0;
 };
 
-bool clock(divider d){
+bool div_clock(divider d){
     if(d -> counter == 0){
         d -> counter = d -> period;
         return true;
@@ -35,7 +35,7 @@ void set_period(divider d, int p) {
     d -> period = p;
 }
 
-void reset(divider d){
+void div_reset(divider d){
     d -> counter = d -> period;
 }
 
