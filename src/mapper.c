@@ -4,12 +4,12 @@
 
 #include "headers/mapper.h"
 
-void create_mapper(mapper ret, cartridge cart,
-                   mapper_type t, irq_handle irq,
-                   void (*mirroring_cb)(void)) {
-    switch (t) {
+void create_mapper(mapper m, cartridge cart,
+                   irq_handle irq
+                   /*void (*mirroring_cb)(void)*/) {
+    switch (cart -> header.mapper_id) {
         case NROM:
-            ret = mapper_nrom_create(cart);
+            m = mapper_nrom_create(cart);
             break;
         /* case SxROM:
             ret -> reset(mapper_mmc1_create(cart, mirroring_cb));

@@ -5,12 +5,12 @@
 #include "headers/bus.h"
 #include <string.h>
 
-void bus_init(bus b, ppu p, /*apu a,*/ cs c, void (*dma)(uint8_t)){
+void bus_init(bus b, ppu p, apu a, cs c, void (*dma)(ppu, uint8_t*)){
     b -> RAM = (uint8_t*)calloc(0x800, sizeof(uint8_t));
     b -> dma_callback = dma;
     b -> mapper = NULL;
     b -> ppu = p;
-    // b -> apu = a;
+    b -> apu = a;
     b -> controller_set = c;
 }
 
@@ -36,7 +36,7 @@ uint8_t bus_read(bus b, uint16_t addr){
             case OAM_DATA:
                 return getOAMData(b -> ppu);
             case APU_CONTROL_AND_STATUS:
-                // return apu_readStatus(b -> apu);
+                return read_status(b -> apu);
                 return 0x00;
             default:
                 perror("Read access attempt at 0x%04X", addr);
@@ -83,17 +83,17 @@ void bus_write(bus b, uint16_t addr, uint8_t value){
                 setData(b -> ppu, value);
                 break;
             case OAM_DMA:
-                b -> dma_callback(value);
+                b -> dma_callback(b -> ppu, &value);
             case JOY1:
                 // m_controller1.strobe(value);
                 // m_controller2.strobe(value);
                 // break;
             case JOY2_AND_FRAME_CONTROL:
             case APU_CONTROL_AND_STATUS:
-                // apu_writeReg(b -> apu, addr, value);
+                write_register(b -> apu, addr, value);
                 break;
             default:
-                if(addr >= APU_REGISTER_START && addr <= APU_REGISTER_END) break; // apu_writeReg(b -> apu, addr, value);
+                if(addr >= APU_REGISTER_START && addr <= APU_REGISTER_END) write_register(b -> apu, addr, value);
                 else perror("Write access attempt at 0x%04X", addr);
                 break;
         }

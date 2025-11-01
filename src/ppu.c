@@ -108,7 +108,7 @@ void create_ppu(ppu pp, pbus pb){
     PBInit(pp -> picture_buffer, SCANLINE_VISIBLE_DOTS, VISIBLE_SCANLINE, MAGENTA);
 }
 
-void step(ppu pp){
+void step(ppu pp, cpu c){
     switch (pp -> pipeline_state) {
         case PRE_RENDER:
             if(pp -> cycle == 1){
@@ -291,7 +291,7 @@ void step(ppu pp){
         case VERTICAL_BLANK:
                 if(pp -> cycle == 1 && pp -> scanline == VISIBLE_SCANLINE + 1){
                     pp -> vblank =  true;
-                    if(pp -> generate_interrupt) pp -> vblank_callback();
+                    if(pp -> generate_interrupt) pp -> vblank_callback(c);
                 }
 
                 if(pp -> cycle >= SCANLINE_END_CYCLE){
@@ -324,7 +324,7 @@ void reset(ppu pp){
     bv_resize(pp -> scanline_sprites, 0);
 }
 
-void setInterruptCallback(ppu pp, void(*cb)(void)){
+void setInterruptCallback(ppu pp, void(*cb)(cpu)){
     pp -> vblank_callback = cb;
 }
 
@@ -336,7 +336,7 @@ void writeOAM(ppu pp, uint16_t addr, uint8_t v){
     pp -> sprite_memory -> data[addr] = v;
 }
 
-void doDMA(ppu pp, const uint8_t* page_ptr){
+void doDMA(ppu pp, uint8_t* page_ptr){
     memcpy(pp -> sprite_memory -> data + pp -> sprite_data_address, page_ptr, 256 - pp -> sprite_data_address);
     if (pp -> sprite_data_address)
         memcpy(pp -> sprite_memory -> data, page_ptr + (256 - pp -> sprite_data_address), pp -> sprite_data_address);

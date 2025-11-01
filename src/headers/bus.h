@@ -13,6 +13,7 @@
 #include "mapper.h"
 #include "controller.h"
 #include "cartridge.h"
+#include "apu/APU.h"
 
 struct CPU;
 typedef struct CPU* cpu;
@@ -49,16 +50,16 @@ typedef enum Register reg;
 struct CPUBus {
     uint8_t* RAM;
     uint8_t* extRAM;
-    void (*dma_callback)(uint8_t);
+    void (*dma_callback)(ppu, uint8_t*);
     mapper mapper;
     ppu ppu;
-    //apu apu;
+    apu apu;
     cs controller_set;
 };
 
 typedef struct CPUBus* bus;
 
-void           bus_init(bus b, ppu p, /*apu a,*/ cs c, void (*dma)(uint8_t));
+void           bus_init(bus b, ppu p, apu a, cs c, void (*dma)(ppu, uint8_t*));
 uint8_t        bus_read(bus b, uint16_t addr);
 void           bus_write(bus b, uint16_t addr, uint8_t value);
 bool           setMapper(bus b, mapper mapper);

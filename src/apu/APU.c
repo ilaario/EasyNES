@@ -11,6 +11,29 @@
 #include "../headers/apu/spsc.h"             // SPSC generico (elem_size = sizeof(float))
 #include "../headers/cartridge.h"
 
+typedef struct CPU* cpu;
+
+/* -------------------- Setup frame counter (slots) -------------------- */
+void APU_setup_frame_counter(apu a, irq_handle irq)
+{
+    frame_clockable slots[] = {
+            &a->pulse1 -> volume -> base,
+            &a->pulse1 -> sweep -> base,
+            &a->pulse1 -> length_counter -> base,
+
+            &a->pulse2 -> volume -> base,
+            &a->pulse2 -> sweep -> base,
+            &a->pulse2 -> length_counter -> base,
+
+            &a->triangle -> length -> base,
+            &a->triangle -> linear -> base,
+
+            &a->noise -> volume -> base,
+            &a->noise -> length -> base,
+    };
+    frame_counter_init(a->frame_counter, slots, sizeof(slots)/sizeof(slots[0]), irq);
+}
+
 /* -------------------- Registri APU -------------------- */
 enum Register {
     APU_SQ1_VOL       = 0x4000,
@@ -42,7 +65,7 @@ enum Register {
     APU_FRAME_CONTROL = 0x4017,
 };
 
-void apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(uint16_t)){
+void    apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(cpu c, uint16_t)){
     a -> pulse1   = (pulse)calloc(1, sizeof(struct Pulse));
     pulse_init(a -> pulse1, Pulse1);
 
@@ -58,8 +81,7 @@ void apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(uint1
     a -> noise    = (noise)calloc(1, sizeof(struct Noise));
     noise_init(a -> noise);
 
-    a -> frame_counter = (frame_counter)calloc(1, sizeof(struct FrameCounter));
-    frame_counter_init(a -> frame_counter, ());
+    APU_setup_frame_counter(a, irq);
 
     a -> sampling_timer = (timer)calloc(1, sizeof(struct Timer));
     timer_init(a -> sampling_timer, (int64_t)(1000000000LL) / (int64_t)(output_sample_rate));
@@ -259,25 +281,4 @@ uint8_t read_status(apu a)
     v |= (last_frame_irq ? 1u : 0u)                             << 6;
     v |= (dmc_irq ? 1u : 0u)                                    << 7;
     return v;
-}
-
-/* -------------------- Setup frame counter (slots) -------------------- */
-void APU_setup_frame_counter(apu a, irq_handle irq)
-{
-    frame_clockable slots[] = {
-            &a->pulse1 -> volume -> base,
-            &a->pulse1 -> sweep -> base,
-            &a->pulse1 -> length_counter -> base,
-
-            &a->pulse2 -> volume -> base,
-            &a->pulse2 -> sweep -> base,
-            &a->pulse2 -> length_counter -> base,
-
-            &a->triangle -> length -> base,
-            &a->triangle -> linear -> base,
-
-            &a->noise -> volume -> base,
-            &a->noise -> length -> base,
-    };
-    frame_counter_init(a->frame_counter, slots, sizeof(slots)/sizeof(slots[0]), irq);
 }

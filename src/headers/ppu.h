@@ -21,6 +21,8 @@
 #include "mapper.h"
 #include "pbus.h"
 
+typedef struct CPU* cpu;
+
 typedef struct {
     int width;
     int height;
@@ -62,7 +64,7 @@ typedef enum character_page{
 struct Mapper;
 
 struct PPU {
-    void (*vblank_callback)(void);
+    void (*vblank_callback)(cpu);
     pbus bus;
     bv sprite_memory;
     bv scanline_sprites;
@@ -104,12 +106,12 @@ struct PPU {
 typedef struct PPU* ppu;
 
 void create_ppu(ppu pp, pbus pb);
-void step(ppu pp);
+void step(ppu pp, cpu c);
 void reset(ppu pp);
 
-void setInterruptCallback(ppu pp, void(*cb)(void));
+void setInterruptCallback(ppu pp, void(*cb)(cpu));
 
-void doDMA(ppu pp, const uint8_t* page_ptr);
+void doDMA(ppu pp, uint8_t* page_ptr);
 
 // Callbacks mapped to CPU address space
 // Addresses written to by the program

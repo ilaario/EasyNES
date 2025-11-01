@@ -46,8 +46,8 @@ typedef struct Mapper* mapper;
 #include "irq.h"
 
 void create_mapper(mapper m, cartridge cart,
-                   mapper_type t, irq_handle irq,
-                   void (*mirroring_cb)(void));
+                   irq_handle irq
+                    /*void (*mirroring_cb)(void)*/);
 
 
 mapper mapper_mmc1_create(cartridge cart);  // ritorna NULL se alloc fallisce
