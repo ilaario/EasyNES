@@ -25,13 +25,19 @@ struct APU{
     frame_counter frame_counter;
 
     bool          divideByTwo;
-    spsc_ring     audio_queue;
+    uint64_t      cpu_cycle_count;
+    spsc_ring*    audio_queue;
     timer         sampling_timer;
 };
 
 typedef struct APU* apu;
 
-void    apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(cpu c, uint16_t));
+void    apu_init(apu a,
+                 audio_player player,
+                 irq_handle frame_irq,
+                 irq_handle dmc_irq,
+                 cpu dmc_cpu,
+                 uint8_t(*dmcDma)(cpu, uint16_t, uint16_t, bool, int));
 void    apu_step(apu a);
 void    write_register(apu a, uint16_t addr, uint8_t value);
 uint8_t read_status(apu a);

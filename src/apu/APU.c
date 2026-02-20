@@ -11,10 +11,8 @@
 #include "../headers/apu/spsc.h"             // SPSC generico (elem_size = sizeof(float))
 #include "../headers/cartridge.h"
 
-typedef struct CPU* cpu;
-
 /* -------------------- Setup frame counter (slots) -------------------- */
-void APU_setup_frame_counter(apu a, irq_handle irq)
+void APU_setup_frame_counter(apu a, irq_handle frame_irq)
 {
     frame_clockable slots[] = {
             &a->pulse1 -> volume -> base,
@@ -31,7 +29,7 @@ void APU_setup_frame_counter(apu a, irq_handle irq)
             &a->noise -> volume -> base,
             &a->noise -> length -> base,
     };
-    frame_counter_init(a->frame_counter, slots, sizeof(slots)/sizeof(slots[0]), irq);
+    frame_counter_init(a->frame_counter, slots, sizeof(slots)/sizeof(slots[0]), frame_irq);
 }
 
 /* -------------------- Registri APU -------------------- */
@@ -65,7 +63,17 @@ enum Register {
     APU_FRAME_CONTROL = 0x4017,
 };
 
-void    apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(cpu c, uint16_t)){
+void apu_init(apu a,
+              audio_player player,
+              irq_handle frame_irq,
+              irq_handle dmc_irq,
+              cpu dmc_cpu,
+              uint8_t(*dmcDma)(cpu, uint16_t, uint16_t, bool, int)){
+    if (!a || !player) exit(EXIT_FAILURE);
+
+    a -> divideByTwo = false;
+    a -> cpu_cycle_count = 0;
+
     a -> pulse1   = (pulse)calloc(1, sizeof(struct Pulse));
     pulse_init(a -> pulse1, Pulse1);
 
@@ -73,7 +81,7 @@ void    apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(cp
     pulse_init(a -> pulse2, Pulse2);
 
     a -> dmc      = (dmc)calloc(1, sizeof(struct DMC));
-    dmc_init(a -> dmc, irq, dmcDma);
+    dmc_init(a -> dmc, dmc_irq, dmc_cpu, dmcDma);
 
     a -> triangle = (triangle)calloc(1, sizeof(struct Triangle));
     triangle_init(a -> triangle);
@@ -81,12 +89,13 @@ void    apu_init(apu a, audio_player player, irq_handle irq, uint8_t(*dmcDma)(cp
     a -> noise    = (noise)calloc(1, sizeof(struct Noise));
     noise_init(a -> noise);
 
-    APU_setup_frame_counter(a, irq);
+    a -> frame_counter = (frame_counter)calloc(1, sizeof(struct FrameCounter));
+    APU_setup_frame_counter(a, frame_irq);
 
     a -> sampling_timer = (timer)calloc(1, sizeof(struct Timer));
     timer_init(a -> sampling_timer, (int64_t)(1000000000LL) / (int64_t)(output_sample_rate));
 
-    a -> audio_queue = player -> audio_queue;
+    a -> audio_queue = &player -> audio_queue;
 
 }
 
@@ -114,23 +123,27 @@ static inline float apu_mix(uint8_t pulse1, uint8_t pulse2, uint8_t triangle, ui
 /* -------------------- Step CPU → APU -------------------- */
 void apu_step(apu a)
 {
-    n_clock(a -> noise);
+    frame_counter_clock(a->frame_counter);
+
     dmc_clock(a -> dmc);
     t_clock(a -> triangle);
 
     if (a->divideByTwo) {
-        frame_counter_clock(a->frame_counter);
         p_clock(a -> pulse1);
         p_clock(a -> pulse2);
+        n_clock(a -> noise);
 
         float s = apu_mix(p_sample(a->pulse1),
                           p_sample(a->pulse2),
                           t_sample(a->triangle),
                           n_sample(a->noise),
                           dmc_sample(a->dmc));
-        (void)spsc_ring_push(&a->audio_queue, &s); /* coda audio SPSC di float */
+        if (a -> audio_queue) {
+            (void)spsc_ring_push(a -> audio_queue, &s); /* coda audio SPSC di float */
+        }
     }
     a->divideByTwo = !a->divideByTwo;
+    a->cpu_cycle_count += 1;
 }
 
 /* -------------------- Scrittura registri -------------------- */
@@ -228,7 +241,7 @@ void write_register(apu a, uint16_t addr, uint8_t value)
             break;
 
         case APU_DMC_FREQ:
-            a->dmc -> irqEnable = (value >> 7) & 1u;
+            set_irq_enable(a->dmc, (value >> 7) & 1u);
             a->dmc -> loop      = (value >> 6) & 1u;
             set_rate(a->dmc, value & 0x0F);
             break;
@@ -251,12 +264,14 @@ void write_register(apu a, uint16_t addr, uint8_t value)
             set_enable(a->triangle -> length, (value & 0x04) != 0);
             set_enable(a->noise -> length,    (value & 0x08) != 0);
             div_control(a->dmc, (value & 0x10) != 0);
+            clear_interrupt(a->dmc);
             break;
 
         case APU_FRAME_CONTROL:
-            frame_counter_reset(a->frame_counter,
-                                (value >> 7) ? FC_Seq5Step : FC_Seq4Step,
-                                (value >> 6) & 1u);
+            frame_counter_request_reset(a->frame_counter,
+                                        (value >> 7) ? FC_Seq5Step : FC_Seq4Step,
+                                        (value >> 6) & 1u,
+                                        (a -> cpu_cycle_count & 1u) != 0);
             break;
     }
 }
@@ -265,10 +280,11 @@ void write_register(apu a, uint16_t addr, uint8_t value)
 uint8_t read_status(apu a)
 {
     bool last_frame_irq = a->frame_counter -> frame_interrupt;
-    frame_counter_clear_frame_interrupt(a->frame_counter);
+    if (!a->frame_counter->frame_irq_set_this_cycle) {
+        frame_counter_clear_frame_interrupt(a->frame_counter);
+    }
 
     bool dmc_irq = a->dmc -> interrupt;
-    clear_interrupt(a->dmc);
 
     /* bit0..3: length counters not zero; bit4: DMC bytes remaining (negato negli originali),
        bit6: frame IRQ, bit7: DMC IRQ */
@@ -277,7 +293,7 @@ uint8_t read_status(apu a)
     v |= (!muted(a->pulse2 -> length_counter))   << 1;
     v |= (!muted(a->triangle -> length)) << 2;
     v |= (!muted(a->noise -> length))    << 3;
-    v |= (!has_more_samples(a->dmc))                     << 4;
+    v |= (has_more_samples(a->dmc) ? 1u : 0u)            << 4;
     v |= (last_frame_irq ? 1u : 0u)                             << 6;
     v |= (dmc_irq ? 1u : 0u)                                    << 7;
     return v;

@@ -4,35 +4,48 @@
 
 #include "headers/mapper.h"
 
-void create_mapper(mapper m, cartridge cart,
+void mapper_destroy(mapper m) {
+    if (!m) return;
+    if (m -> destroy) {
+        m -> destroy(m);
+        return;
+    }
+    free(m);
+}
+
+void create_mapper(mapper* out, cartridge cart,
                    irq_handle irq
                    /*void (*mirroring_cb)(void)*/) {
+    if (!out || !cart) return;
+    *out = NULL;
+
     switch (cart -> header.mapper_id) {
         case NROM:
-            m = mapper_nrom_create(cart);
+            *out = mapper_nrom_create(cart);
             break;
-        /* case SxROM:
-            ret -> reset(mapper_mmc1_create(cart, mirroring_cb));
+        case SxROM:
+            *out = mapper_mmc1_create(cart);
             break;
-         case UxROM:
-            ret -> reset(new MapperUxROM(cart));
+        case UxROM:
+            *out = mapper_uxrom_create(cart);
             break;
         case CNROM:
-            ret -> reset(new MapperCNROM(cart));
+            *out = mapper_cnrom_create(cart);
             break;
         case MMC3:
-            ret -> reset(new MapperMMC3(cart, irq, mirroring_cb));
+            *out = mapper_mmc3_create(cart, irq);
             break;
         case AxROM:
-            ret -> reset(new MapperAxROM(cart, mirroring_cb));
+            *out = mapper_axrom_create(cart);
             break;
         case ColorDreams:
-            ret -> reset(new MapperColorDreams(cart, mirroring_cb));
+            *out = mapper_colordreams_create(cart);
             break;
         case GxROM:
-            ret -> reset(new MapperGxROM(cart, mirroring_cb));
-            break; */
+            *out = mapper_gxrom_create(cart);
+            break;
         default:
+            perror("Unsupported mapper id: %u", cart -> header.mapper_id);
             break;
     }
 }

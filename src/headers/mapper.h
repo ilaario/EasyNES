@@ -31,10 +31,11 @@ struct Mapper {
     uint8_t (*chr_read)(struct Mapper*, uint16_t addr);
     void    (*chr_write)(struct Mapper*, uint16_t addr, uint8_t v);
     void    (*reset)(struct Mapper*);
+    void    (*destroy)(struct Mapper*);
 
-    enum mirror_type (*get_mirror_type)();
+    enum mirror_type (*get_mirror_type)(struct Mapper*);
 
-    void    (*scanlineIRQ)();
+    void    (*scanlineIRQ)(struct Mapper*);
 
     cartridge cart;
     mapper_type m_type;
@@ -42,23 +43,25 @@ struct Mapper {
 
 typedef struct Mapper* mapper;
 
-#include "mapper_nrom.h"
 #include "irq.h"
 
-void create_mapper(mapper m, cartridge cart,
+void create_mapper(mapper* out, cartridge cart,
                    irq_handle irq
                     /*void (*mirroring_cb)(void)*/);
 
+mapper mapper_nrom_create(cartridge cart);
+mapper mapper_mmc1_create(cartridge cart);
+mapper mapper_uxrom_create(cartridge cart);
+mapper mapper_cnrom_create(cartridge cart);
+mapper mapper_mmc3_create(cartridge cart, irq_handle irq);
+mapper mapper_axrom_create(cartridge cart);
+mapper mapper_colordreams_create(cartridge cart);
+mapper mapper_gxrom_create(cartridge cart);
+void   mapper_destroy(mapper m);
 
-mapper mapper_mmc1_create(cartridge cart);  // ritorna NULL se alloc fallisce
-
-mapper create_mapper_for_cart(cartridge cart);
-
-static void mmc1_remap_prg(mapper m);
-static void mmc1_remap_chr(mapper m);
-static void mmc1_write_control(mapper m, uint8_t v);
-
-bool inline hasExtendedRAM(mapper m) { return true; }
+static inline bool hasExtendedRAM(mapper m) {
+    return m != NULL && m -> cart != NULL && m -> cart -> prg_ram != NULL;
+}
 
 
 #endif //EASYNES_MAPPER_H

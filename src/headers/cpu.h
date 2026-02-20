@@ -11,6 +11,8 @@
 #include "bus.h"
 #include "irq.h"
 
+#define CPU_MAX_POLL_POINTS          4
+
 #define INSTRUCTION_MODE_MASK        0x3
 
 #define OPERATION_MASK               0xE0
@@ -55,6 +57,19 @@ struct CPU{
     bool                  N;
 
     bool                  pending_NMI;
+    int                   pending_nmi_delay;
+    int                   dmc_dma_recent_cycles;
+    bool                  irq_latched;
+    bool                  nmi_latched;
+    int                   poll_cycles[CPU_MAX_POLL_POINTS];
+    int                   poll_count;
+    bool                  pending_i_update;
+    bool                  pending_i_value;
+    int                   pending_i_apply_cycle;
+    bool                  interrupt_sequence_active;
+    int                   interrupt_sequence_type;
+    int                   interrupt_sequence_end_cycle;
+    bool                  interrupt_sequence_hijacked;
 
     bus                   bus;
 
@@ -73,15 +88,16 @@ void       irq_init(irq_handler irq, int bit, cpu c);
 void       release(irq_handle irq);
 void       pull(irq_handle irq);
 
-bool       is_pending_IRQ(cpu c) { return !c -> I && c -> irq_pulldowns != 0; };
+static inline bool is_pending_IRQ(cpu c) { return !c -> I && c -> irq_pulldowns != 0; }
+static inline bool is_irq_line_low(cpu c) { return c -> irq_pulldowns != 0; }
 
 void       cpu_init(cpu c, bus b);
 void       cpu_step(cpu c);
 void       cpu_reset(cpu c);
 void       cpu_addr_reset(cpu c,uint16_t start_addr);
-uint16_t   get_PC(cpu c) { return c -> PC; }
+static inline uint16_t get_PC(cpu c) { return c -> PC; }
 void       skip_OAM_DMA_cycles(cpu c);
-void       skip_DMC_DMA_cycles(cpu c);
+void       skip_DMC_DMA_cycles(cpu c, int cycles);
 void       nmi_interrupt(cpu c);
 irq_handle create_IRQ_handler(cpu c);
 void       set_IRQ_pulldown(cpu c,int bit, bool state);

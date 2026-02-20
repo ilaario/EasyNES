@@ -123,7 +123,8 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
     bool mirror_4scr                    = (pCartridge -> header.flags6 & 0x08) != 0;
     pCartridge -> header.has_battery    = (pCartridge -> header.flags6 & 0x02) != 0;
     pCartridge -> header.has_trainer    = (pCartridge -> header.flags6 & 0x04) != 0;
-    pCartridge -> header.mirroring      = ver_flip + mirror_4scr;
+    if (mirror_4scr) pCartridge -> header.mirroring = FOUR_SCREEN;
+    else pCartridge -> header.mirroring = ver_flip ? MIRROR_VERTICAL : MIRROR_HORIZONTAL;
     pCartridge -> header.mapper_id      = (pCartridge -> header.flags6 & 0xF0) >> 4;
 
     if(!pCartridge -> header.has_trainer) {

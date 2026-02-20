@@ -2,3 +2,10 @@
 /build
 /test
 *.a
+/cmake-build-debug
+/log
+*.log
+*.o
+*.i
+
+test_*.c

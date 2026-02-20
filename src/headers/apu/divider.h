@@ -15,13 +15,13 @@ struct Divider{
 
 typedef struct Divider* divider;
 
-void divider_init(divider d, int period){
+static inline void divider_init(divider d, int period){
     if(!d) exit(EXIT_FAILURE);
     d -> period = period;
     d -> counter = 0;
 };
 
-bool div_clock(divider d){
+static inline bool div_clock(divider d){
     if(d -> counter == 0){
         d -> counter = d -> period;
         return true;
@@ -31,15 +31,15 @@ bool div_clock(divider d){
     return false;
 }
 
-void set_period(divider d, int p) {
+static inline void set_period(divider d, int p) {
     d -> period = p;
 }
 
-void div_reset(divider d){
+static inline void div_reset(divider d){
     d -> counter = d -> period;
 }
 
-int get_period(divider d){
+static inline int get_period(divider d){
     return d -> period;
 }
 

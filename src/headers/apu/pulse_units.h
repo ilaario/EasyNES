@@ -18,8 +18,8 @@ enum Pulse_U_Type
     SEQ_25_INV = 3,
 };
 
-const int count_pd  = 4;
-const int length_pd = 8;
+static const int count_pd  = 4;
+static const int length_pd = 8;
 
 static inline bool active(enum Pulse_U_Type cycle, int idx)
 {

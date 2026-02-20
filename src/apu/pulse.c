@@ -5,6 +5,11 @@
 #include "../headers/apu/pulse.h"
 #include <math.h>
 
+static void quarter_frame_noop(struct FrameClockable *self) { (void)self; }
+static void half_frame_sweep_bridge(struct FrameClockable *self) {
+    s_half_frame_clock((sweep)self);
+}
+
 static inline int calc_note_freq(int period, int seq_length, double clock_period_ns)
 {
     return (int)(1e9 / (clock_period_ns * period * seq_length));
@@ -32,12 +37,24 @@ static inline void freq_to_note(double freq, char *out, size_t out_size)
 void pulse_init(pulse p, enum Pulse_Type t){
     if(!p) exit(EXIT_FAILURE);
     p -> type = t;
+    p -> volume = (volume)calloc(1, sizeof(struct Volume));
+    volume_init(p -> volume);
+    p -> length_counter = (length_counter)calloc(1, sizeof(struct LengthCounter));
+    length_init(p -> length_counter);
+    p -> sequencer = (divider)calloc(1, sizeof(struct Divider));
+    divider_init(p -> sequencer, 0);
+    p -> seq_idx = 0;
+    p -> seq_type = SEQ_12_5;
+    p -> period = 0;
+
     p -> sweep = (sweep)calloc(1, sizeof(struct Sweep));
-    sweep_init(p -> sweep, p, t);
+    sweep_init(p -> sweep, p, t == Pulse1);
 }
 
 void sweep_init(sweep s, struct Pulse* p, bool ones_complement){
     if(!s) exit(EXIT_FAILURE);
+    s -> base.quarter_frame_clock = quarter_frame_noop;
+    s -> base.half_frame_clock = half_frame_sweep_bridge;
     s -> pulse = p;
     s -> ones_complement = ones_complement;
 
@@ -57,7 +74,7 @@ void p_set_period(pulse p, int pi){
 }
 
 void p_clock(pulse p){
-    if(div_clock(p -> sequencer)) p -> seq_idx = (8 + (p -> seq_idx - 1) % 8);
+    if(div_clock(p -> sequencer)) p -> seq_idx = (p -> seq_idx + 7) % 8;
 }
 
 uint8_t p_sample(pulse p){
@@ -81,7 +98,9 @@ void s_half_frame_clock(sweep s){
     if(s -> shift > 0){
         int current = s -> pulse -> period;
         int target  = calculate_target(s, current);
-        return;
+        if (!is_muted(current, target)) {
+            p_set_period(s -> pulse, target);
+        }
     }
 }
 

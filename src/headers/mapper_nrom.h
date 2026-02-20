@@ -19,7 +19,6 @@ typedef struct mapper_nrom* nrom;
 
 // factory per NROM (mapper 0)
 mapper mapper_nrom_create(cartridge cart);
-void mapper_destroy(mapper m);
 
 
 #endif //EASYNES_MAPPER_NROM_H

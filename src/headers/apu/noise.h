@@ -8,16 +8,16 @@
 #include "divider.h"
 #include "units.h"
 
-enum Mode : bool {
+typedef enum Mode {
     Bit1 = 0,
-    BIt6 = 1,
-} mode;
+    Bit6 = 1,
+} noise_mode;
 
 struct Noise{
     volume         volume;
     length_counter length;
     divider        divider;
-    enum Mode      mode;
+    noise_mode     mode;
     int            period;
     int            shift_reg;
 };

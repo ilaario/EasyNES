@@ -13,7 +13,7 @@
 enum Pulse_Type {
     Pulse1 = 1,
     Pulse2 = 2,
-} type;
+};
 
 struct Pulse{
     volume            volume;

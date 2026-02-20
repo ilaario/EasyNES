@@ -94,6 +94,6 @@ void emulator_mute_audio(Emulator *emu, bool mute);
 
 /* DMA (private in C++, public API qui o dichiarale static nel .c) */
 void emulator_oamdma(Emulator* e, uint8_t page);
-uint8_t emulator_dmcdma(cpu c, uint16_t addr);
+uint8_t emulator_dmcdma(cpu c, uint16_t addr, uint16_t halt_addr, bool do_align_cycle, int stall_cycles);
 
 #endif //EASYNES_EMU_H

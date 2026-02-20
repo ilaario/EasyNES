@@ -65,6 +65,7 @@ struct Mapper;
 
 struct PPU {
     void (*vblank_callback)(cpu);
+    cpu last_cpu;
     pbus bus;
     bv sprite_memory;
     bv scanline_sprites;
@@ -85,6 +86,8 @@ struct PPU {
     uint8_t data_buffer;
 
     uint8_t sprite_data_address;
+    uint8_t io_bus;
+    uint32_t io_bus_decay;
 
     bool long_sprite;
     bool generate_interrupt;
@@ -111,7 +114,7 @@ void reset(ppu pp);
 
 void setInterruptCallback(ppu pp, void(*cb)(cpu));
 
-void doDMA(ppu pp, uint8_t* page_ptr);
+void doDMA(ppu pp, const uint8_t* page_ptr);
 
 // Callbacks mapped to CPU address space
 // Addresses written to by the program
@@ -126,6 +129,8 @@ uint8_t getStatus(ppu pp);
 uint8_t getData(ppu pp);
 uint8_t getOAMData(ppu pp);
 void setOAMData(ppu pp, uint8_t value);
+uint8_t ppu_read_open_bus(ppu pp);
+void ppu_write_open_bus(ppu pp, uint8_t value);
 
 void DEBUG_goto_scanline_dot(ppu ppu, int32_t scanline, int32_t dot);
 

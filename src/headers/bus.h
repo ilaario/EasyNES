@@ -50,7 +50,11 @@ typedef enum Register reg;
 struct CPUBus {
     uint8_t* RAM;
     uint8_t* extRAM;
-    void (*dma_callback)(ppu, uint8_t*);
+    uint8_t data_bus;
+    uint16_t address_bus;
+    bool address_bus_is_write;
+    cpu cpu_owner;
+    void (*dma_callback)(ppu, const uint8_t*);
     mapper mapper;
     ppu ppu;
     apu apu;
@@ -59,7 +63,7 @@ struct CPUBus {
 
 typedef struct CPUBus* bus;
 
-void           bus_init(bus b, ppu p, apu a, cs c, void (*dma)(ppu, uint8_t*));
+void           bus_init(bus b, ppu p, apu a, cs c, void (*dma)(ppu, const uint8_t*));
 uint8_t        bus_read(bus b, uint16_t addr);
 void           bus_write(bus b, uint16_t addr, uint8_t value);
 bool           setMapper(bus b, mapper mapper);

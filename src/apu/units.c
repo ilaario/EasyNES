@@ -4,9 +4,25 @@
 
 #include "../headers/apu/units.h"
 
+static void half_frame_noop(struct FrameClockable *self) { (void)self; }
+
+static void quarter_frame_length_bridge(struct FrameClockable *self) { (void)self; }
+static void half_frame_length_bridge(struct FrameClockable *self) {
+    half_frame_clock((length_counter)self);
+}
+
+static void quarter_frame_linear_bridge(struct FrameClockable *self) {
+    lc_quarter_frame_clock((linear_counter)self);
+}
+
+static void quarter_frame_volume_bridge(struct FrameClockable *self) {
+    v_quarter_frame_clock((volume)self);
+}
 
 void length_init(length_counter l){
     if(!l) exit(EXIT_FAILURE);
+    l -> base.quarter_frame_clock = quarter_frame_length_bridge;
+    l -> base.half_frame_clock    = half_frame_length_bridge;
     l -> halt    = false;
     l -> enabled = false;
     l -> counter = 0;
@@ -42,6 +58,8 @@ bool muted(length_counter f){
 
 void linear_init(linear_counter l){
     if(!l) exit(EXIT_FAILURE);
+    l -> base.quarter_frame_clock = quarter_frame_linear_bridge;
+    l -> base.half_frame_clock    = half_frame_noop;
     l -> reload       = false;
     l -> reload_value = 0;
     l -> control      = true;
@@ -65,6 +83,8 @@ void lc_quarter_frame_clock(linear_counter f){
 
 void volume_init(volume v){
     if(!v) exit(EXIT_FAILURE);
+    v -> base.quarter_frame_clock = quarter_frame_volume_bridge;
+    v -> base.half_frame_clock    = half_frame_noop;
     v -> divider = (divider)calloc(1, sizeof(struct Divider));
     divider_init(v -> divider, 0);
     v -> fixedVolumeOrPeriod = max_volume;

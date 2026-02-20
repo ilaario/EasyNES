@@ -45,9 +45,14 @@ struct FrameCounter {
     FrameCounterMode   mode;
     int                counter;
     bool               interrupt_inhibit;
+    bool               reset_pending;
+    int                reset_delay;
+    FrameCounterMode   pending_mode;
+    bool               pending_interrupt_inhibit;
 
     irq_handle         irq;
     bool               frame_interrupt;
+    bool               frame_irq_set_this_cycle;
 };
 
 typedef struct FrameCounter* frame_counter;
@@ -57,7 +62,7 @@ void frame_counter_init(frame_counter fc,
                         irq_handle irq);
 
 void frame_counter_clear_frame_interrupt(frame_counter fc);
-void frame_counter_reset(frame_counter fc, FrameCounterMode mode, bool irq_inhibit);
+void frame_counter_request_reset(frame_counter fc, FrameCounterMode mode, bool irq_inhibit, bool odd_cpu_cycle);
 void frame_counter_clock(frame_counter fc);
 
 
