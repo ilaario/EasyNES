@@ -11,8 +11,39 @@
 #include <strings.h>
 #include <time.h>
 #include <stdio.h>
+#if defined(__linux__)
+#include <dlfcn.h>
+#endif
 
 typedef uint64_t TimePointNS;
+
+#if defined(__linux__)
+typedef void X11Display;
+typedef X11Display *(*x11_open_display_fn)(const char *);
+typedef int (*x11_close_display_fn)(X11Display *);
+
+static bool can_open_x11_display(const char *display_name) {
+    if (!display_name || !*display_name) return false;
+
+    void *libx11 = dlopen("libX11.so.6", RTLD_LAZY);
+    if (!libx11) return true;
+
+    x11_open_display_fn xopen =
+        (x11_open_display_fn)dlsym(libx11, "XOpenDisplay");
+    x11_close_display_fn xclose =
+        (x11_close_display_fn)dlsym(libx11, "XCloseDisplay");
+
+    bool ok = true;
+    if (xopen && xclose) {
+        X11Display *dpy = xopen(display_name);
+        ok = (dpy != NULL);
+        if (dpy) xclose(dpy);
+    }
+
+    dlclose(libx11);
+    return ok;
+}
+#endif
 
 static inline TimePointNS now_ns(void) {
     struct timespec ts;
@@ -154,9 +185,27 @@ void emulator_init(Emulator *e) {
     e -> screen_scale = 3.0f;
     e -> video_width = NESVideoWidth;
     e -> video_height = NESVideoHeight;
+#if defined(__linux__)
+    const char *display = getenv("DISPLAY");
+    if (!display || !*display) {
+        fprintf(stderr, "DISPLAY is not set. Run inside a graphical session.\n");
+        exit(EXIT_FAILURE);
+    }
+    if (!can_open_x11_display(display)) {
+        fprintf(stderr, "Cannot open X11 display '%s'. Check DISPLAY/X server.\n", display);
+        exit(EXIT_FAILURE);
+    }
+#endif
     InitWindow((int)(e -> video_width * e -> screen_scale),
                (int)(e -> video_height * e -> screen_scale),
                "EasyNES");
+    if (!IsWindowReady()) {
+        const char *display = getenv("DISPLAY");
+        fprintf(stderr,
+                "Failed to initialize window (DISPLAY=%s). Run inside a graphical session or set a valid DISPLAY.\n",
+                display ? display : "(unset)");
+        exit(EXIT_FAILURE);
+    }
     SetTargetFPS(60);
 
     pbus_init(e -> picture_bus);
@@ -167,6 +216,9 @@ void emulator_init(Emulator *e) {
     cpu_init(e -> cpu, e -> bus);
 
     init_audio(e -> audio_player, (int)(1.0 / APU_CLOCK_PERIOD_S));
+    if (!start(e -> audio_player)) {
+        fprintf(stderr, "Warning: audio device unavailable. Continuing without audio output.\n");
+    }
     apu_init(e -> apu,
              e -> audio_player,
              create_IRQ_handler(e -> cpu),
@@ -229,9 +281,7 @@ void emulator_dispose(Emulator *e) {
         e -> bus -> extRAM = NULL;
     }
 
-    if (e -> audio_player) {
-        spsc_ring_free(&e -> audio_player -> audio_queue);
-    }
+    if (e -> audio_player) audio_shutdown(e -> audio_player);
 
     if (e -> cpu) {
         if (e -> cpu -> irq_handlers) {

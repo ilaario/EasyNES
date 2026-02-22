@@ -257,7 +257,10 @@ int log_stop(){
     write_buffer("EXITING", TRACE);
 #endif
 
-    return fclose(fp);
+    if (!fp) return 0;
+    int rc = fclose(fp);
+    fp = NULL;
+    return rc;
 }
 
 /***

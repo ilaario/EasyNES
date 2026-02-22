@@ -79,7 +79,8 @@ void p_clock(pulse p){
 
 uint8_t p_sample(pulse p){
     if(muted(p -> length_counter)) return 0;
-    if(is_muted(p -> sweep -> period, calculate_target(p -> sweep, p -> sweep -> period))) return 0;
+    // Mute rule must use pulse timer period, not sweep unit period (0..7).
+    if(is_muted(p -> period, calculate_target(p -> sweep, p -> period))) return 0;
     if(!active(p -> seq_type, p -> seq_idx)) return 0;
 
     return get(p -> volume);

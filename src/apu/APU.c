@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "../headers/apu/APU.h"              // definisci qui struct APU, Pulse, Triangle, Noise, DMC, ecc.
 #include "../headers/apu/frame_counter.h"    // header C che abbiamo fatto prima
@@ -97,6 +98,24 @@ void apu_init(apu a,
 
     a -> audio_queue = &player -> audio_queue;
 
+    const float sample_rate = (float)output_sample_rate;
+    const float dt = 1.0f / sample_rate;
+    const float pi = 3.14159265358979323846f;
+
+    const float hp90_rc = 1.0f / (2.0f * pi * 90.0f);
+    const float hp440_rc = 1.0f / (2.0f * pi * 440.0f);
+    a -> hp90_alpha = hp90_rc / (hp90_rc + dt);
+    a -> hp440_alpha = hp440_rc / (hp440_rc + dt);
+
+    const float lp14k_rc = 1.0f / (2.0f * pi * 14000.0f);
+    a -> lp14k_alpha = dt / (lp14k_rc + dt);
+
+    a -> hp90_x_prev = 0.0f;
+    a -> hp90_y_prev = 0.0f;
+    a -> hp440_x_prev = 0.0f;
+    a -> hp440_y_prev = 0.0f;
+    a -> lp14k_y_prev = 0.0f;
+
 }
 
 /* -------------------- Mixer NES -------------------- */
@@ -120,9 +139,31 @@ static inline float apu_mix(uint8_t pulse1, uint8_t pulse2, uint8_t triangle, ui
     return pulse_out + tnd_out;
 }
 
+static inline float apu_filter_sample(apu a, float x)
+{
+    float y = a -> hp90_alpha * (a -> hp90_y_prev + x - a -> hp90_x_prev);
+    a -> hp90_x_prev = x;
+    a -> hp90_y_prev = y;
+
+    x = y;
+    y = a -> hp440_alpha * (a -> hp440_y_prev + x - a -> hp440_x_prev);
+    a -> hp440_x_prev = x;
+    a -> hp440_y_prev = y;
+
+    x = y;
+    y = a -> lp14k_y_prev + a -> lp14k_alpha * (x - a -> lp14k_y_prev);
+    a -> lp14k_y_prev = y;
+
+    if (y > 1.0f) y = 1.0f;
+    if (y < -1.0f) y = -1.0f;
+    return y;
+}
+
 /* -------------------- Step CPU → APU -------------------- */
 void apu_step(apu a)
 {
+    if (!a) return;
+
     frame_counter_clock(a->frame_counter);
 
     dmc_clock(a -> dmc);
@@ -133,15 +174,21 @@ void apu_step(apu a)
         p_clock(a -> pulse2);
         n_clock(a -> noise);
 
+    }
+
+    int sample_ticks = timer_clock(a -> sampling_timer, CPU_CLOCK_PERIOD_NS);
+    if (sample_ticks > 0 && a -> audio_queue) {
         float s = apu_mix(p_sample(a->pulse1),
                           p_sample(a->pulse2),
                           t_sample(a->triangle),
                           n_sample(a->noise),
                           dmc_sample(a->dmc));
-        if (a -> audio_queue) {
+        s = apu_filter_sample(a, s);
+        while (sample_ticks-- > 0) {
             (void)spsc_ring_push(a -> audio_queue, &s); /* coda audio SPSC di float */
         }
     }
+
     a->divideByTwo = !a->divideByTwo;
     a->cpu_cycle_count += 1;
 }

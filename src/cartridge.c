@@ -6,6 +6,33 @@
 
 FILE* cartridge_pointer;
 
+static uint64_t nes2_shift_to_bytes(uint8_t shift) {
+    if (shift == 0) return 0;
+    if (shift >= 58) return 0;
+    return 64ull << shift;
+}
+
+static uint64_t nes2_exp_mult_to_bytes(uint8_t encoded) {
+    uint8_t multiplier = (uint8_t)((encoded & 0x03u) * 2u + 1u);
+    uint8_t exponent = (uint8_t)(encoded >> 2u);
+    if (exponent >= 63) return 0;
+    return ((uint64_t)multiplier) << exponent;
+}
+
+static uint32_t bytes_to_kib_ceil(uint64_t bytes) {
+    if (bytes == 0) return 0;
+    uint64_t kib = (bytes + 1023ull) / 1024ull;
+    if (kib > UINT32_MAX) return 0;
+    return (uint32_t)kib;
+}
+
+static bool header_tail_is_zero(const uint8_t raw_header[16]) {
+    for (int i = 12; i <= 15; ++i) {
+        if (raw_header[i] != 0) return false;
+    }
+    return true;
+}
+
 /**
  * Read the first 4 bytes from the header [0x00000 ... 0x00003] and validate the signature.
  * The signature is read in Little Endian and it represent the string "NES\0x1A"
@@ -37,6 +64,7 @@ const char* get_mirroring(enum mirror_type mirror)
         case 3:return "ONE_SCREEN_HIGHER";
         case 4: return "MIRROR_FOUR_SCREEN";
     }
+    return "MIRROR_UNKNOWN";
 }
 
 /**
@@ -52,6 +80,7 @@ const char* get_format(enum nes_rom_format format)
         case 1: return "NES_FORMAT_NES20";
         case 2: return "NES_FORMAT_UNKNOWN";
     }
+    return "NES_FORMAT_UNKNOWN";
 }
 
 /**
@@ -67,6 +96,7 @@ const char* get_type(enum vs_playchoice type)
         case 1: return "VS_SYSTEM";
         case 2: return "PLAYCHOICE";
     }
+    return "TYPE_UNKNOWN";
 }
 
 /**
@@ -83,7 +113,7 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
 
     printf("NES cartridge file loaded\nReading header file...\n");
 
-    cartridge pCartridge = (cartridge)malloc(sizeof(struct Cartridge) + 1);
+    cartridge pCartridge = (cartridge)calloc(1, sizeof(struct Cartridge));
     if(pCartridge == NULL) {
         perror("!Error! - Invalid malloc");
         exit(EXIT_FAILURE);
@@ -91,33 +121,24 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
 
     size_t read_bytes = fread(pCartridge -> header.raw_header, 1, 16, cartridge_pointer);
     printf("Byte header letti = %zu\n", read_bytes);
+    if (read_bytes != 16) {
+        perror("!Error! Header size is invalid (%zu bytes)", read_bytes);
+        exit(EXIT_FAILURE);
+    }
 
     printf("Validating signature...\n");
     pCartridge -> header.valid_signature = valid_signature(pCartridge -> header.raw_header,
                                                            sizeof(pCartridge -> header.raw_header) / sizeof(uint8_t));
-    if(!pCartridge -> header.valid_signature) printf("!Warning! Invalid signature\n");
-    else printf("Found valid signature\n");
-
-    printf("Reading PRG-ROM size...\n");
-    pCartridge -> header.prg_rom_size_bytes = pCartridge -> header.raw_header[4] * 16;
-    if(pCartridge -> header.prg_rom_size_bytes <= 0) {
-        perror("!Error! Invalid PRG-ROM read");
+    if(!pCartridge -> header.valid_signature) {
+        perror("!Error! Invalid signature");
         exit(EXIT_FAILURE);
     }
-    printf("Read %dKiB of PRG-ROM (%d Slots * 16KiB)\n", pCartridge -> header.prg_rom_size_bytes, pCartridge -> header.raw_header[4]);
-
-    printf("Reading CHR-ROM size...");
-    pCartridge -> header.chr_rom_size_bytes = pCartridge -> header.raw_header[5] * 8;
-    if(pCartridge -> header.chr_rom_size_bytes == 0){
-        printf("No CHR-ROM found.\n");
-        pCartridge -> chr_rom = NULL;
-    } else {
-        printf("Read %dKiB of CHR-ROM (%d Slots * 8KiB)\n", pCartridge -> header.chr_rom_size_bytes, pCartridge -> header.raw_header[5]);
-    }
+    printf("Found valid signature\n");
 
     printf("Reading Flag 6 byte...\n");
 
     pCartridge -> header.flags6 = pCartridge -> header.raw_header[6];
+    pCartridge -> header.flags7 = pCartridge -> header.raw_header[7];
 
     bool ver_flip                       = (pCartridge -> header.flags6 & 0x01) != 0;
     bool mirror_4scr                    = (pCartridge -> header.flags6 & 0x08) != 0;
@@ -125,37 +146,40 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
     pCartridge -> header.has_trainer    = (pCartridge -> header.flags6 & 0x04) != 0;
     if (mirror_4scr) pCartridge -> header.mirroring = FOUR_SCREEN;
     else pCartridge -> header.mirroring = ver_flip ? MIRROR_VERTICAL : MIRROR_HORIZONTAL;
-    pCartridge -> header.mapper_id      = (pCartridge -> header.flags6 & 0xF0) >> 4;
-
-    if(!pCartridge -> header.has_trainer) {
-        pCartridge -> trainer = NULL;
-    } else {
-        pCartridge -> trainer = (uint8_t*)malloc(512);
-        if(pCartridge -> trainer == NULL) {
-            perror("!Error! Malloc failed for Trainer");
-            exit(EXIT_FAILURE);
-        }
-    }
 
     printf("Done reading Flag 6. Summary:\n"
            "Mirroring Type = %s\n"
            "Battery present = %d\n"
            "Trainer present = %d\n"
            "Mapper ID (Low Nibble) = 0x%02X",
-           get_mirroring(pCartridge -> header.mirroring), pCartridge -> header.has_battery, pCartridge -> header.has_trainer, pCartridge -> header.mapper_id);
+           get_mirroring(pCartridge -> header.mirroring),
+           pCartridge -> header.has_battery,
+           pCartridge -> header.has_trainer,
+           (pCartridge -> header.flags6 & 0xF0) >> 4);
 
     printf("Reading Flag 7...");
-    pCartridge -> header.flags7 = pCartridge -> header.raw_header[7];
+    pCartridge -> header.type       = (enum vs_playchoice)(pCartridge -> header.flags7 & 0x03);
+    uint8_t format_bits             = (uint8_t)((pCartridge -> header.flags7 >> 2) & 0x03);
+    pCartridge -> header.format     = (format_bits == 0x02) ? NES_FORMAT_NES20 : NES_FORMAT_INES1;
+    if (format_bits == 0x01 || format_bits == 0x03) {
+        perror("!Warning! Non-standard format bits (%u). Falling back to iNES parsing", format_bits);
+    }
 
-    pCartridge -> header.type       = (pCartridge -> header.flags7 & 0x03);
-    pCartridge -> header.format     = (pCartridge -> header.flags7 & 0x0C);
-    pCartridge -> header.mapper_id  = (pCartridge -> header.flags7 & 0xF0) | pCartridge -> header.mapper_id;
+    uint16_t mapper_low = (uint16_t)((pCartridge -> header.flags6 & 0xF0) >> 4);
+    uint16_t mapper_mid = (uint16_t)(pCartridge -> header.flags7 & 0xF0);
+    if (pCartridge -> header.format == NES_FORMAT_INES1 && !header_tail_is_zero(pCartridge -> header.raw_header)) {
+        mapper_mid = 0;
+    }
+    pCartridge -> header.mapper_id = (uint16_t)(mapper_low | mapper_mid);
 
     printf("Done reading Flag 7. Summary:\n"
            "Cartridge type = %s\n"
            "Cartridge format = %s\n"
            "Mapper ID (Full) = 0x%02X",
            get_type(pCartridge -> header.type), get_format(pCartridge -> header.format), pCartridge -> header.mapper_id);
+
+    uint32_t prg_ram_kib = 0;
+    uint32_t chr_ram_kib = 8;
 
     if(pCartridge -> header.format == NES_FORMAT_INES1){
         pCartridge -> header.nes2_header = NULL;
@@ -164,9 +188,29 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
             perror("!Error! Failed allocation of iNES Header");
             exit(EXIT_FAILURE);
         }
+        pCartridge -> header.prg_rom_size_bytes = (uint32_t)pCartridge -> header.raw_header[4] * 16u;
+        pCartridge -> header.chr_rom_size_bytes = (uint32_t)pCartridge -> header.raw_header[5] * 8u;
+        if(pCartridge -> header.prg_rom_size_bytes == 0) {
+            perror("!Error! Invalid PRG-ROM read");
+            exit(EXIT_FAILURE);
+        }
+        printf("Read %uKiB of PRG-ROM (%u Slots * 16KiB)\n",
+               pCartridge -> header.prg_rom_size_bytes,
+               pCartridge -> header.raw_header[4]);
+        if(pCartridge -> header.chr_rom_size_bytes == 0){
+            printf("No CHR-ROM found.\n");
+        } else {
+            printf("Read %uKiB of CHR-ROM (%u Slots * 8KiB)\n",
+                   pCartridge -> header.chr_rom_size_bytes,
+                   pCartridge -> header.raw_header[5]);
+        }
+
         printf("Reading PRG-RAM size...");
         pCartridge -> header.ines_header -> prg_ram_size_bytes = (pCartridge -> header.raw_header[8] == 0 ? 8 : pCartridge -> header.raw_header[8] * 8);
-        printf("Read %dKiB of PRG-RAM (%d Slots * 8KiB)",  pCartridge -> header.ines_header -> prg_ram_size_bytes, pCartridge -> header.raw_header[8]);
+        prg_ram_kib = pCartridge -> header.ines_header -> prg_ram_size_bytes;
+        printf("Read %uKiB of PRG-RAM (%u Slots * 8KiB)",
+               pCartridge -> header.ines_header -> prg_ram_size_bytes,
+               pCartridge -> header.raw_header[8]);
 
         printf("Reading TV System...");
         pCartridge -> header.ines_header->tv_format = pCartridge -> header.raw_header[9] & 0x01; // 0 = NTSC, 1 = PAL
@@ -186,43 +230,112 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
         }
 
     } else if (pCartridge -> header.format == NES_FORMAT_NES20){
-        pCartridge -> header.ines_header = NULL;
-        perror("!Warning! NES2.0 is still not supported, WIP");
-        exit(EXIT_FAILURE);
+        pCartridge -> header.nes2_header = (struct nes2_header*)calloc(1, sizeof(struct nes2_header));
+        pCartridge -> header.ines_header = (struct ines_header*)calloc(1, sizeof(struct ines_header));
+        if (!pCartridge -> header.nes2_header || !pCartridge -> header.ines_header) {
+            perror("!Error! Failed allocation of NES2.0 headers");
+            exit(EXIT_FAILURE);
+        }
+
+        pCartridge -> header.nes2_header -> flag8 = pCartridge -> header.raw_header[8];
+        pCartridge -> header.nes2_header -> flag9 = pCartridge -> header.raw_header[9];
+        pCartridge -> header.nes2_header -> flag10 = pCartridge -> header.raw_header[10];
+        pCartridge -> header.nes2_header -> flag11 = pCartridge -> header.raw_header[11];
+        pCartridge -> header.nes2_header -> submapper_id = (uint8_t)(pCartridge -> header.raw_header[8] >> 4);
+        pCartridge -> header.nes2_header -> prg_ram_shift = (uint8_t)(pCartridge -> header.raw_header[10] & 0x0F);
+        pCartridge -> header.nes2_header -> prg_nvram_shift = (uint8_t)((pCartridge -> header.raw_header[10] >> 4) & 0x0F);
+        pCartridge -> header.nes2_header -> chr_ram_shift = (uint8_t)(pCartridge -> header.raw_header[11] & 0x0F);
+        pCartridge -> header.nes2_header -> chr_nvram_shift = (uint8_t)((pCartridge -> header.raw_header[11] >> 4) & 0x0F);
+
+        uint8_t prg_msb = (uint8_t)(pCartridge -> header.raw_header[9] & 0x0F);
+        uint8_t chr_msb = (uint8_t)((pCartridge -> header.raw_header[9] >> 4) & 0x0F);
+
+        if (prg_msb != 0x0F) {
+            pCartridge -> header.prg_rom_size_bytes =
+                (((uint32_t)prg_msb << 8) | pCartridge -> header.raw_header[4]) * 16u;
+        } else {
+            pCartridge -> header.prg_rom_size_bytes =
+                bytes_to_kib_ceil(nes2_exp_mult_to_bytes(pCartridge -> header.raw_header[4]));
+        }
+
+        if (chr_msb != 0x0F) {
+            pCartridge -> header.chr_rom_size_bytes =
+                (((uint32_t)chr_msb << 8) | pCartridge -> header.raw_header[5]) * 8u;
+        } else {
+            pCartridge -> header.chr_rom_size_bytes =
+                bytes_to_kib_ceil(nes2_exp_mult_to_bytes(pCartridge -> header.raw_header[5]));
+        }
+
+        if (pCartridge -> header.prg_rom_size_bytes == 0) {
+            perror("!Error! Invalid NES2.0 PRG-ROM size");
+            exit(EXIT_FAILURE);
+        }
+
+        uint16_t mapper_high = (uint16_t)(pCartridge -> header.raw_header[8] & 0x0F);
+        pCartridge -> header.mapper_id |= (uint16_t)(mapper_high << 8);
+
+        uint64_t prg_ram_bytes = nes2_shift_to_bytes(pCartridge -> header.nes2_header -> prg_ram_shift);
+        uint64_t prg_nvram_bytes = nes2_shift_to_bytes(pCartridge -> header.nes2_header -> prg_nvram_shift);
+        uint64_t chr_ram_bytes = nes2_shift_to_bytes(pCartridge -> header.nes2_header -> chr_ram_shift);
+        uint64_t chr_nvram_bytes = nes2_shift_to_bytes(pCartridge -> header.nes2_header -> chr_nvram_shift);
+
+        prg_ram_kib = bytes_to_kib_ceil(prg_ram_bytes > prg_nvram_bytes ? prg_ram_bytes : prg_nvram_bytes);
+        chr_ram_kib = bytes_to_kib_ceil(chr_ram_bytes > chr_nvram_bytes ? chr_ram_bytes : chr_nvram_bytes);
+        if (chr_ram_kib == 0) chr_ram_kib = 8;
+
+        pCartridge -> header.ines_header -> prg_ram_size_bytes = prg_ram_kib;
+        pCartridge -> header.ines_header -> tv_format = (uint8_t)(pCartridge -> header.raw_header[12] & 0x03);
+        pCartridge -> header.ines_header -> padding = 0;
+
+        printf("NES2.0 detected\n"
+               "Mapper ID = %u (submapper %u)\n"
+               "PRG-ROM = %uKiB\n"
+               "CHR-ROM = %uKiB\n"
+               "PRG-RAM = %uKiB\n"
+               "CHR-RAM = %uKiB\n",
+               pCartridge -> header.mapper_id,
+               pCartridge -> header.nes2_header -> submapper_id,
+               pCartridge -> header.prg_rom_size_bytes,
+               pCartridge -> header.chr_rom_size_bytes,
+               prg_ram_kib,
+               chr_ram_kib);
     } else {
-        perror("!Error! Unknown cartrige type");
+        perror("!Error! Unknown cartrige type (flags7=0x%02X, format_bits=%u)", pCartridge -> header.flags7, format_bits);
         exit(EXIT_FAILURE);
     }
 
     printf("Allocating PRG-ROM...\n");
-    pCartridge -> prg_rom = (uint8_t*)malloc(KIB(pCartridge -> header.prg_rom_size_bytes));
+    size_t prg_rom_bytes_to_read = KIB(pCartridge -> header.prg_rom_size_bytes);
+    pCartridge -> prg_rom = (uint8_t*)malloc(prg_rom_bytes_to_read);
     if(pCartridge -> prg_rom == NULL){
         perror("!Error! Malloc failed for PRG-ROM");
         exit(EXIT_FAILURE);
     }
-    printf("Allocated %dKiB for PRG-ROM\n", pCartridge -> header.prg_rom_size_bytes);
+    printf("Allocated %uKiB for PRG-ROM\n", pCartridge -> header.prg_rom_size_bytes);
 
     printf("Allocating PRG-RAM...\n");
-    pCartridge -> prg_ram = (uint8_t*)malloc(KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes));
-    if(pCartridge -> prg_ram == NULL){
-        perror("!Error! Malloc failed for PRG-RAM");
-        exit(EXIT_FAILURE);
+    if (prg_ram_kib > 0) {
+        pCartridge -> prg_ram = (uint8_t*)malloc(KIB(prg_ram_kib));
+        if(pCartridge -> prg_ram == NULL){
+            perror("!Error! Malloc failed for PRG-RAM");
+            exit(EXIT_FAILURE);
+        }
+        memset(pCartridge -> prg_ram, 0, KIB(prg_ram_kib));
+    } else {
+        pCartridge -> prg_ram = NULL;
     }
-
-    memset(pCartridge -> prg_ram, 0, KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes));
-
-    printf("Allocated %dKiB for PRG-RAM\n", pCartridge -> header.ines_header -> prg_ram_size_bytes);
+    printf("Allocated %uKiB for PRG-RAM\n", prg_ram_kib);
 
     if(pCartridge -> header.chr_rom_size_bytes == 0){
         pCartridge -> chr_rom = NULL;
         pCartridge -> has_chr_ram = true;
         printf("No need to allocate CHR-ROM\nAllocating CHR-RAM instead...");
-        pCartridge -> chr_ram = (uint8_t*)malloc(KIB(8));
+        pCartridge -> chr_ram = (uint8_t*)malloc(KIB(chr_ram_kib));
         if(pCartridge -> chr_ram == NULL){
             perror("!Error! Malloc failed for CHR-RAM");
             exit(EXIT_FAILURE);
         }
-        printf("Allocated %dKiB for CHR-RAM\n", 8);
+        printf("Allocated %uKiB for CHR-RAM\n", chr_ram_kib);
     } else {
         pCartridge -> chr_ram = NULL;
         pCartridge -> has_chr_ram = false;
@@ -232,11 +345,10 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
             perror("!Error! Malloc failed for CHR-ROM");
             exit(EXIT_FAILURE);
         }
-        printf("Allocated %dKiB for CHR-ROM\n", pCartridge -> header.chr_rom_size_bytes);
+        printf("Allocated %uKiB for CHR-ROM\n", pCartridge -> header.chr_rom_size_bytes);
     }
 
-    printf("Allocated %u KiB (%u bytes) of PRG-RAM\n",
-           KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes), pCartridge -> header.ines_header -> prg_ram_size_bytes);
+    printf("Allocated %u KiB (%u bytes) of PRG-RAM\n", prg_ram_kib, KIB(prg_ram_kib));
 
     uint32_t offset = 16;
     if(pCartridge -> header.has_trainer == true) {
@@ -252,31 +364,32 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
     }
 
     uint32_t pgr_rom_start   = offset;
-    uint32_t pgr_rom_end     = pgr_rom_start + KIB(pCartridge -> header.prg_rom_size_bytes);
+    uint32_t pgr_rom_end     = pgr_rom_start + (uint32_t)prg_rom_bytes_to_read;
 
     printf("Offset for PGR-ROM = (%d -> %d)", pgr_rom_start, pgr_rom_end);
 
-    size_t prgrom_read = fread(pCartridge -> prg_rom, 1, KIB(pCartridge -> header.prg_rom_size_bytes), cartridge_pointer);
-    if(prgrom_read < pCartridge -> header.prg_rom_size_bytes){
+    size_t prgrom_read = fread(pCartridge -> prg_rom, 1, prg_rom_bytes_to_read, cartridge_pointer);
+    if(prgrom_read != prg_rom_bytes_to_read){
         perror("!Error! Failed reading PGR-ROM");
         exit(EXIT_FAILURE);
     }
 
-    printf("Read and copied %dKiB from cartridge to PGR-ROM", prgrom_read / 1024);
+    printf("Read and copied %zuKiB from cartridge to PGR-ROM", prgrom_read / 1024);
 
+    size_t chr_rom_bytes_to_read = KIB(pCartridge -> header.chr_rom_size_bytes);
     uint32_t chr_rom_start   = pgr_rom_end;
-    uint32_t chr_rom_end     = chr_rom_start + KIB(pCartridge -> header.chr_rom_size_bytes);
+    uint32_t chr_rom_end     = chr_rom_start + (uint32_t)chr_rom_bytes_to_read;
 
     printf("Offset for CHR-ROM = (%d -> %d)", chr_rom_start, chr_rom_end);
 
     if(pCartridge -> header.chr_rom_size_bytes > 0){
-        size_t chrrom_read = fread(pCartridge -> chr_rom, 1, KIB(pCartridge -> header.chr_rom_size_bytes), cartridge_pointer);
-        if(chrrom_read < pCartridge -> header.chr_rom_size_bytes){
-            perror("!Error! Failed reading PGR-ROM");
+        size_t chrrom_read = fread(pCartridge -> chr_rom, 1, chr_rom_bytes_to_read, cartridge_pointer);
+        if(chrrom_read != chr_rom_bytes_to_read){
+            perror("!Error! Failed reading CHR-ROM");
             exit(EXIT_FAILURE);
         }
 
-        printf("Read and copied %dKiB from cartridge to CHR-ROM", chrrom_read / 1024);
+        printf("Read and copied %zuKiB from cartridge to CHR-ROM", chrrom_read / 1024);
     }
 
     rewind(cartridge_pointer);
@@ -284,7 +397,7 @@ cartridge read_allocate_cartridge(const char* cartridge_path){
     fseek(cartridge_pointer, 0L, SEEK_END);
     size_t sz = ftell(cartridge_pointer);
 
-    if(chr_rom_end > sz){
+    if((size_t)chr_rom_end > sz){
         perror("!Error! Segmentation fault, read went over file size");
         exit(EXIT_FAILURE);
     }
@@ -303,6 +416,11 @@ void free_cartridge(cartridge c) {
 
     if (c->prg_rom) { free(c->prg_rom); c->prg_rom = NULL;}
 
+    if (c->trainer) {
+        free(c->trainer);
+        c->trainer = NULL;
+    }
+
     if (c->prg_ram) {
         free(c->prg_ram); c->prg_ram = NULL;
     }
@@ -317,6 +435,15 @@ void free_cartridge(cartridge c) {
         c->chr_ram = NULL;
     }
 
+    if (c -> header.ines_header) {
+        free(c -> header.ines_header);
+        c -> header.ines_header = NULL;
+    }
+    if (c -> header.nes2_header) {
+        free(c -> header.nes2_header);
+        c -> header.nes2_header = NULL;
+    }
+
     free(c);
 }
 
@@ -325,6 +452,10 @@ void free_cartridge(cartridge c) {
  * @param pCartridge a Cartridge struct
  */
 void print_info(cartridge pCartridge){
+    uint32_t prg_ram_kib = (pCartridge && pCartridge -> header.ines_header)
+                           ? pCartridge -> header.ines_header -> prg_ram_size_bytes
+                           : 0;
+    uint32_t chr_ram_kib = pCartridge && pCartridge -> chr_ram ? 8 : 0;
     printf("=== Cartridge Info ===\n"
            "Mapper:      %d\n"
            "Mirroring:   %s\n"
@@ -341,8 +472,8 @@ void print_info(cartridge pCartridge){
            pCartridge -> header.has_battery ? "Yes" : "No",
            KIB(pCartridge -> header.prg_rom_size_bytes),
            KIB(pCartridge -> header.chr_rom_size_bytes),
-           KIB(pCartridge -> header.ines_header -> prg_ram_size_bytes),
-           pCartridge -> chr_ram == NULL ? 0 : KIB(8));
+           KIB(prg_ram_kib),
+           KIB(chr_ram_kib));
 }
 
 /**
@@ -354,7 +485,7 @@ void print_info(cartridge pCartridge){
  * @return A pointer to the dummy cartridge
  */
 cartridge make_dummy(uint8_t prg_kib, uint8_t chr_kib, bool has_prg_ram, bool chr_is_ram){
-    cartridge cart = (cartridge)malloc(sizeof(struct Cartridge));
+    cartridge cart = (cartridge)calloc(1, sizeof(struct Cartridge));
     if(cart == NULL){
         perror("Error allocating dummy cartridge");
         exit(EXIT_FAILURE);
@@ -367,6 +498,7 @@ cartridge make_dummy(uint8_t prg_kib, uint8_t chr_kib, bool has_prg_ram, bool ch
         perror("Error allocating iNES header in dummy cartridge");
         exit(EXIT_FAILURE);
     }
+    cart -> header.nes2_header = NULL;
     cart -> header.ines_header -> prg_ram_size_bytes = has_prg_ram ? 8 : 0;
     cart -> prg_rom = (uint8_t*)malloc(KIB(1024));
     for(int i = 0; i < KIB(prg_kib); i++){

@@ -28,6 +28,16 @@ struct APU{
     uint64_t      cpu_cycle_count;
     spsc_ring*    audio_queue;
     timer         sampling_timer;
+
+    float         hp90_alpha;
+    float         hp440_alpha;
+    float         lp14k_alpha;
+
+    float         hp90_x_prev;
+    float         hp90_y_prev;
+    float         hp440_x_prev;
+    float         hp440_y_prev;
+    float         lp14k_y_prev;
 };
 
 typedef struct APU* apu;

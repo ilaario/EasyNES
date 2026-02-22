@@ -39,6 +39,7 @@ typedef struct AudioPlayer* audio_player;
 
 void init_audio(audio_player a, int input_rate);
 bool start(audio_player a);
+void audio_shutdown(audio_player a);
 void audio_mute(audio_player a, bool mute);
 
 #endif //EASYNES_AUDIO_PLAYER_H
